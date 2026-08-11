@@ -1,0 +1,16 @@
+gtnh_qol_improvements.config.features=Features
+gtnh_qol_improvements.config.vajraOffhandReplacement=Vajra offhand block replacement
+gtnh_qol_improvements.config.vajraToolFunctions=Vajra wrench + wire cutter
+gtnh_qol_improvements.config.dualTerminal=Quick encoding terminal + Alt/NEI + search/transfer
+gtnh_qol_improvements.config.terminalGtRecipeSearchSuffix=GT circuit / non-consumed item search suffix
+item.gtnh_qol_improvements.dual_terminal.name=ME Wireless Quick Encoding Terminal
+key.gtnh_qol_improvements.openDualTerminal=Open ME Wireless Quick Encoding Terminal
+key.categories.gtnh_qol_improvements=GTNH QoL Improvements
+gtnh_qol_improvements.terminal.disabled=The quick encoding terminal feature is disabled in the mod configuration.
+gtnh_qol_improvements.terminal.storage=ME Storage
+gtnh_qol_improvements.terminal.encoding=Encoding
+gtnh_qol_improvements.terminal.mode.crafting=Crafting Pattern
+gtnh_qol_improvements.terminal.mode.processing_4x4=4x4 Processing Pattern
+gtnh_qol_improvements.terminal.mode.processing_3x3=3x3 Processing Pattern
+gtnh_qol_improvements.terminal.encode_alt_upload=Hold ALT to encode and upload directly
+gtnh_qol_improvements.nei.encode_search_upload=Encode + search + upload

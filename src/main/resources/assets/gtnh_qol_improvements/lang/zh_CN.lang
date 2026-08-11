@@ -1,0 +1,16 @@
+gtnh_qol_improvements.config.features=功能开关
+gtnh_qol_improvements.config.vajraOffhandReplacement=金刚杵副手方块替换
+gtnh_qol_improvements.config.vajraToolFunctions=金刚杵扳手 / 剪线钳功能
+gtnh_qol_improvements.config.dualTerminal=快速编码终端 / Alt+NEI 编码 / 搜索与转移
+gtnh_qol_improvements.config.terminalGtRecipeSearchSuffix=GT虚拟电路 / 不消耗物品搜索后缀
+item.gtnh_qol_improvements.dual_terminal.name=ME无线快速编码终端
+key.gtnh_qol_improvements.openDualTerminal=打开ME无线快速编码终端
+key.categories.gtnh_qol_improvements=GTNH QoL Improvements
+gtnh_qol_improvements.terminal.disabled=快速编码终端功能已在模组配置中关闭。
+gtnh_qol_improvements.terminal.storage=ME库存
+gtnh_qol_improvements.terminal.encoding=编码
+gtnh_qol_improvements.terminal.mode.crafting=合成样板
+gtnh_qol_improvements.terminal.mode.processing_4x4=4x4 处理样板
+gtnh_qol_improvements.terminal.mode.processing_3x3=3x3 处理样板
+gtnh_qol_improvements.terminal.encode_alt_upload=按住 ALT 编码并直接上传
+gtnh_qol_improvements.nei.encode_search_upload=编码 + 搜索 + 上传
