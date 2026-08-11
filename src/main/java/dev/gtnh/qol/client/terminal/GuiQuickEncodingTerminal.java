@@ -93,7 +93,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     private static final int PATTERN_CRAFTING_GRID_X = 24;
     private static final int PATTERN_CRAFTING_GRID_Y = 20;
     private static final int PATTERN_CRAFTING_OUTPUT_Y = 98;
-    private static final int PATTERN_PROCESSING_OUTPUT_Y_OFFSET = -1;
+    private static final int PATTERN_PROCESSING_4X4_OUTPUT_Y_OFFSET = -1;
     private static final int PATTERN_BLANK_SLOT_X = 20;
     private static final int PATTERN_ENCODE_BUTTON_X = 42;
     private static final int PATTERN_ENCODED_SLOT_X = 64;
@@ -487,14 +487,14 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
                     slot.setHidden(i >= 3);
                     if (i < 3) {
                         slot.setX(PATTERN_PANEL_X + PATTERN_CRAFTING_GRID_X + i * 18);
-                        slot.setY(panelY + PATTERN_CRAFTING_OUTPUT_Y + PATTERN_PROCESSING_OUTPUT_Y_OFFSET);
+                        slot.setY(panelY + PATTERN_CRAFTING_OUTPUT_Y);
                     }
                 } else {
                     slot.setHidden(crafting || (!inverted ? y != activePage || page != 0 : page != activePage));
                     slot.setX(PATTERN_PANEL_X + PATTERN_PROCESSING_GRID_X + x * 18);
                     slot.setY(
                         panelY + (inverted ? PATTERN_INVERTED_GRID_Y + y * 18 : PATTERN_NORMAL_SMALL_ROW_Y)
-                            + PATTERN_PROCESSING_OUTPUT_Y_OFFSET);
+                            + PATTERN_PROCESSING_4X4_OUTPUT_Y_OFFSET);
                 }
             }
         }
