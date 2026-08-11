@@ -1,55 +1,48 @@
 # GTNH QoL Improvements
 
-面向 GT New Horizons 1.7.10 daily 的独立 QoL 模组。
+面向 GT New Horizons 1.7.10 Daily 的轻量 QoL 模组，集中改善金刚杵操作与 AE2 样板编码流程。所有功能均可在配置页中独立开关。
 
-## 功能
+![快速编码终端界面](docs/images/quick-encoding-terminal.png)
 
-模组配置页只有三个独立开关：
+## 主要功能
 
-1. **金刚杵副手方块替换**：使用 GraviSuite 或 GregTech 金刚杵挖掘时，下一 tick 用 Backhand 副手中的方块替换原方块，并走正常 Forge 放置规则。
-2. **金刚杵扳手 / 剪线钳**：金刚杵右键 GT 机器、物品管道和流体管道时执行原生扳手行为；右键 GT 线缆时执行原生剪线钳连接行为。也支持 AE2 `IOrientable`、IC2 `IWrenchable` 和 Forge 可旋转方块。
-3. **快速编码终端 / Alt+NEI 编码 / 搜索与转移**：添加 `ME无线快速编码终端`。它能放入 Baubles Expanded 的 `Terminal` 饰品槽，并在同一界面中提供 ME 库存、接口终端和样板编码。终端支持 3×3 合成、3×3 处理与 4×4 处理样板；按住 Alt 点击 NEI 的 `+` 可自动识别配方、编码、搜索并上传样板。
+### 快速编码终端
 
-快捷键默认未绑定，可在控制设置中的 `GTNH QoL Improvements` 分类绑定。
+- 在同一界面中整合 ME 库存、接口终端和样板编码。
+- 支持 3×3 合成、3×3 处理和 4×4 处理样板，并自动适配配方类型。
+- 支持 NEI 配方转移、Alt 一键编码/搜索/上传，以及 GT 虚拟电路和不消耗物品的搜索后缀。
+- 可放入 Baubles Expanded 的 `Terminal` 饰品槽，并通过自定义快捷键打开。
+- 可与 AE2FC 能量卡或量子桥卡合成，获得无限电力或无视距离与维度限制的能力。
 
-合成配方为无序合成：
+终端的合成材料为 ME 无线终端、ME 扩展样板终端和 ME 接口终端。
 
-- ME 无线终端
-- ME 扩展样板终端
-- ME 接口终端
+### 金刚杵增强
 
-输出的快速编码终端需要像普通无线终端一样充电并绑定安全终端。它可以继续与 AE2FC 的能量卡或量子桥卡无序合成，分别获得无限电力或无视距离与维度限制的能力。
+- 挖掘时自动使用副手方块替换原方块。
+- 提供 GT 扳手与剪线钳的九宫格交互，可调整机器朝向以及线缆、管道连接。
+- 加入手感同创造模式的长按挖掘保护，点按不受影响，降低误拆机器和管线的风险。
 
 ## 配置
 
-游戏内进入 `Mods -> GTNH QoL Improvements -> Config`。配置文件位于：
+在 `Mods -> GTNH QoL Improvements -> Config` 中设置，配置文件为 `config/gtnh_qol_improvements.cfg`。
 
-`config/gtnh_qol_improvements.cfg`
-
-三个键分别是：
+四个独立开关：
 
 - `vajraOffhandReplacement`
 - `vajraToolFunctions`
 - `dualTerminal`
+- `terminalGtRecipeSearchSuffix`
 
-## 构建
+## 依赖
 
-项目使用 GTNH Gradle 模板，当前版本为 `1.2.0`：
+适用于包含 AE2、AE2 Fluid Crafting、GregTech 5U、NEI、Backhand 和 Baubles Expanded 的 GTNH Daily 实例。模组需要同时安装在客户端和服务端。
 
-```powershell
-.\gradlew.bat updateBuildScript
-.\gradlew.bat build
-```
+仓库同时提供 [Modernity Dark UI 适配资源包](resourcepack/modernity-dark-ui)，在资源包列表中将其置于 Modernity 之上即可使用；每次 tag 发布都会自动附带对应 ZIP。
 
-产物位于 `build/libs/`。
+## 致谢
 
-## 目标依赖
+快速编码终端的创意来源于 [AE2Things](https://github.com/asdflj/AE2Things)，感谢其作者和贡献者为 GTNH 社区提供的优秀设计。
 
-- Applied Energistics 2 `rv3-beta-1029-GTNH`
-- AE2 Fluid Crafting `1.5.100-gtnh`
-- GregTech 5U `5.09.54.79`
-- NotEnoughItems `2.8.120-GTNH`
-- Backhand `1.8.13`
-- Baubles Expanded `2.2.22-GTNH`
+## 许可证
 
-代码针对 GTNH Daily 670 依赖集编译和验证。
+本项目采用 [GNU General Public License v3.0](LICENSE) 许可证。

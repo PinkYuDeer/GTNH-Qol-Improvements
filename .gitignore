@@ -44,14 +44,17 @@ layout.json
 /*.jar
 /*.zip
 /resourcepacks/
+/release-assets/
 /tools/
 
 # Unused template/extraction directories
 /.template-expand/
 /META-INF/
 
-# Upstream template material not used by this mod
-/docs/
+# Keep only the README screenshot from the upstream-ignored documentation tree
+/docs/*
+!/docs/images/
+!/docs/images/quick-encoding-terminal.png
 /LICENSE-template
 /CODEOWNERS
 /.github/scripts/

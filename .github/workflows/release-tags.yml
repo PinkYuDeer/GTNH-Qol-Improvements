@@ -12,3 +12,30 @@ jobs:
   release-tags:
     uses: GTNewHorizons/GTNH-Actions-Workflows/.github/workflows/release-tags.yml@master
     secrets: inherit
+
+  package-modernity-dark-ui:
+    name: Package Modernity Dark UI resource pack
+    needs: release-tags
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Package resource pack
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: python scripts/package_resource_pack.py "${RELEASE_VERSION}"
+
+      - name: Attach resource pack to GTNH tag release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          gh release upload "${RELEASE_VERSION}" \
+            "release-assets/GTNH-QoL-Improvements-Modernity-Dark-UI-${RELEASE_VERSION}.zip" \
+            --clobber
