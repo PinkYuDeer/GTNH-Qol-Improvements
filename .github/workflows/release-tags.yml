@@ -27,9 +27,7 @@ jobs:
           python-version: '3.12'
 
       - name: Package resource pack
-        env:
-          RELEASE_VERSION: ${{ github.ref_name }}
-        run: python scripts/package_resource_pack.py "${RELEASE_VERSION}"
+        run: python scripts/package_resource_pack.py
 
       - name: Attach resource pack to GTNH tag release
         env:
@@ -37,5 +35,5 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_name }}
         run: |
           gh release upload "${RELEASE_VERSION}" \
-            "release-assets/GTNH-QoL-Improvements-Modernity-Dark-UI-${RELEASE_VERSION}.zip" \
+            "release-assets/GTNH-QoL-Improvements-Modernity-Dark-UI.zip" \
             --clobber

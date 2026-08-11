@@ -8,9 +8,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCE_PACK = ROOT / "resourcepack/modernity-dark-ui"
 DEFAULT_OUTPUT_DIRECTORY = ROOT / "release-assets"
+OUTPUT_FILENAME = "GTNH-QoL-Improvements-Modernity-Dark-UI.zip"
 
 
-def package(version: str, output_directory: Path) -> Path:
+def package(output_directory: Path) -> Path:
     if not RESOURCE_PACK.joinpath("pack.mcmeta").is_file():
         raise FileNotFoundError(f"Resource pack metadata not found: {RESOURCE_PACK / 'pack.mcmeta'}")
 
@@ -19,7 +20,7 @@ def package(version: str, output_directory: Path) -> Path:
         raise RuntimeError(f"Resource pack contains no PNG assets: {RESOURCE_PACK}")
 
     output_directory.mkdir(parents=True, exist_ok=True)
-    output = output_directory / f"GTNH-QoL-Improvements-Modernity-Dark-UI-{version}.zip"
+    output = output_directory / OUTPUT_FILENAME
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for path in files:
             archive.write(path, path.relative_to(RESOURCE_PACK).as_posix())
@@ -34,7 +35,6 @@ def package(version: str, output_directory: Path) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Package the Modernity Dark UI release asset.")
-    parser.add_argument("version", help="Release tag used in the output filename.")
     parser.add_argument(
         "--output-directory",
         type=Path,
@@ -42,7 +42,7 @@ def main() -> None:
         help="Directory for the generated ZIP (default: release-assets).",
     )
     arguments = parser.parse_args()
-    print(package(arguments.version, arguments.output_directory.resolve()))
+    print(package(arguments.output_directory.resolve()))
 
 
 if __name__ == "__main__":
