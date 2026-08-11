@@ -6,6 +6,7 @@ import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.network.NetworkRegistry;
 import dev.gtnh.qol.GTNHQolImprovements;
 import dev.gtnh.qol.network.QolNetwork;
+import dev.gtnh.qol.network.ServerMiddleClickQueue;
 import dev.gtnh.qol.network.ServerTerminalOpenQueue;
 import dev.gtnh.qol.network.ServerVajraClickQueue;
 import dev.gtnh.qol.terminal.QolItems;
@@ -21,6 +22,9 @@ public class CommonProxy {
         FMLCommonHandler.instance()
             .bus()
             .register(new ServerTerminalOpenQueue());
+        FMLCommonHandler.instance()
+            .bus()
+            .register(new ServerMiddleClickQueue());
         FMLCommonHandler.instance()
             .bus()
             .register(new ServerVajraClickQueue());

@@ -26,7 +26,9 @@ public final class NeiIntegration {
     private static final AltEncodeOverlayHandler TRANSFER_HANDLER = new AltEncodeOverlayHandler();
     private static final Set<String> REGISTERED_IDENTIFIERS = new HashSet<>();
     private static final RecipeButtonHandler RECIPE_BUTTON_HANDLER = new RecipeButtonHandler();
+    private static final BookmarkCraftHandler BOOKMARK_CRAFT_HANDLER = new BookmarkCraftHandler();
     private static boolean recipeButtonHandlerRegistered;
+    private static boolean bookmarkCraftHandlerRegistered;
 
     private NeiIntegration() {}
 
@@ -34,6 +36,10 @@ public final class NeiIntegration {
         if (!recipeButtonHandlerRegistered) {
             recipeButtonHandlerRegistered = true;
             MinecraftForge.EVENT_BUS.register(RECIPE_BUTTON_HANDLER);
+        }
+        if (!bookmarkCraftHandlerRegistered) {
+            bookmarkCraftHandlerRegistered = true;
+            BookmarkCraftHandler.registerFirst(BOOKMARK_CRAFT_HANDLER);
         }
         registerIdentifier("crafting", true);
         registerIdentifier("crafting2x2", true);

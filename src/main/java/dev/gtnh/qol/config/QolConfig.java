@@ -14,6 +14,7 @@ public final class QolConfig {
     public static boolean vajraToolFunctions = true;
     public static boolean dualTerminal = true;
     public static boolean terminalGtRecipeSearchSuffix = true;
+    public static boolean middleClickOrdering = true;
 
     private static Configuration configuration;
 
@@ -63,6 +64,15 @@ public final class QolConfig {
                 + "在自动搜索接口时追加GT虚拟电路编号及不消耗物品（模具、模头、透镜等）后缀。");
         gtSearchSuffix.setLanguageKey("gtnh_qol_improvements.config.terminalGtRecipeSearchSuffix");
         terminalGtRecipeSearchSuffix = gtSearchSuffix.getBoolean(true);
+
+        Property middleClick = configuration.get(
+            CATEGORY_FEATURES,
+            "middleClickOrdering",
+            true,
+            "Middle-click an NEI bookmark in the quick encoding terminal to order it. In the world, middle-click a block to select it from the player inventory, pull it from ME storage, or open an autocrafting order.\n"
+                + "在快速编码终端中键点击NEI书签下单；在世界中键方块时从玩家背包选取、从ME库存取出，或打开自动合成下单界面。");
+        middleClick.setLanguageKey("gtnh_qol_improvements.config.middleClickOrdering");
+        middleClickOrdering = middleClick.getBoolean(true);
 
         ConfigCategory category = configuration.getCategory(CATEGORY_FEATURES);
         category.setLanguageKey("gtnh_qol_improvements.config.features");

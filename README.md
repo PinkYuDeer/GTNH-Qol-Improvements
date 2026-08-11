@@ -11,6 +11,7 @@
 - 在同一界面中整合 ME 库存、接口终端和样板编码。
 - 支持 3×3 合成、3×3 处理和 4×4 处理样板，并自动适配配方类型。
 - 支持 NEI 配方转移、Alt 一键编码/搜索/上传，以及 GT 虚拟电路和不消耗物品的搜索后缀。
+- 支持在终端中键点击 NEI 书签发起下单；在世界中键方块时可从玩家背包选取、从 ME 库存取出，或在无现货时打开自动合成下单界面。
 - 可放入 Baubles Expanded 的 `Terminal` 饰品槽，并通过自定义快捷键打开。
 - 可与 AE2FC 能量卡或量子桥卡合成，获得无限电力或无视距离与维度限制的能力。
 
@@ -26,12 +27,13 @@
 
 在 `Mods -> GTNH QoL Improvements -> Config` 中设置，配置文件为 `config/gtnh_qol_improvements.cfg`。
 
-四个独立开关：
+五个独立开关：
 
 - `vajraOffhandReplacement`
 - `vajraToolFunctions`
 - `dualTerminal`
 - `terminalGtRecipeSearchSuffix`
+- `middleClickOrdering`（默认开启）
 
 ## 依赖
 
