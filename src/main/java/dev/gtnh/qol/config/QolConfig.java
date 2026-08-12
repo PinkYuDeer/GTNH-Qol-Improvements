@@ -51,8 +51,8 @@ public final class QolConfig {
             CATEGORY_FEATURES,
             "dualTerminal",
             true,
-            "Enable the wireless dual terminal, Alt+NEI encoding, searching, and pattern transfer as one feature.\n"
-                + "启用二合一终端、Alt+NEI 编码、搜索与样板转移（同一开关）。");
+            "Enable the panel/wireless quick encoding terminals, Alt+NEI encoding, searching, and pattern transfer as one feature.\n"
+                + "启用面板/无线快速编码终端、Alt+NEI 编码、搜索与样板转移（同一开关）。");
         terminal.setLanguageKey("gtnh_qol_improvements.config.dualTerminal");
         dualTerminal = terminal.getBoolean(true);
 

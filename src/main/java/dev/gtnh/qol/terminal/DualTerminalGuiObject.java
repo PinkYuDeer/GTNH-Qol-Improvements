@@ -9,11 +9,10 @@ import net.minecraft.world.World;
 import appeng.api.features.IWirelessTermHandler;
 import appeng.api.networking.events.MENetworkBootingStatusChange;
 import appeng.api.networking.events.MENetworkEventSubscribe;
-import appeng.api.parts.IInterfaceTerminal;
 import appeng.api.storage.data.IAEStack;
 import appeng.items.contents.WirelessPatternTerminalGuiObject;
 
-public final class DualTerminalGuiObject extends WirelessPatternTerminalGuiObject implements IInterfaceTerminal {
+public final class DualTerminalGuiObject extends WirelessPatternTerminalGuiObject implements QuickEncodingTerminalHost {
 
     private static final String QUICK_CRAFTING_MODE = "gtnhQolQuickCraftingMode";
     private static final String QUICK_PROCESSING_GRID_SIZE = "gtnhQolQuickProcessingGridSize";
@@ -31,6 +30,11 @@ public final class DualTerminalGuiObject extends WirelessPatternTerminalGuiObjec
     public DualTerminalGuiObject(IWirelessTermHandler handler, ItemStack stack, EntityPlayer player, World world,
         int slot) {
         super(handler, stack, player, world, slot, 2, 0);
+    }
+
+    @Override
+    public boolean supportsExtendedProcessing() {
+        return true;
     }
 
     @Override

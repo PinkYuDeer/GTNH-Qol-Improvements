@@ -56,6 +56,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     private static final Field AE_STACK_INVENTORY_SIZE = findField(IAEStackInventory.class, "size");
 
     private final ContainerInterfaceTerminal interfaceDelegate;
+    private final QuickEncodingTerminalHost quickTerminal;
     private final SlotRestrictedInput blankPatternSlot;
     private final SlotRestrictedInput encodedPatternSlot;
 
@@ -92,14 +93,25 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
 
     public ContainerQuickEncodingTerminal(InventoryPlayer inventoryPlayer, ITerminalHost host) {
         super(inventoryPlayer, host, true);
+        if (!(host instanceof QuickEncodingTerminalHost terminal)) {
+            throw new IllegalArgumentException("Quick encoding terminal host required");
+        }
+        quickTerminal = terminal;
         ContainerOpenContext context = new ContainerOpenContext(host);
         context.setWorld(inventoryPlayer.player.worldObj);
-        context.setX(getDualTerminal().getInventorySlot());
-        context.setY(0);
-        context.setZ(0);
-        context.setSide(ForgeDirection.UNKNOWN);
+        if (host instanceof DualTerminalGuiObject wireless) {
+            context.setX(wireless.getInventorySlot());
+            context.setY(0);
+            context.setZ(0);
+            context.setSide(ForgeDirection.UNKNOWN);
+        } else if (host instanceof PartQuickEncodingTerminal panel) {
+            context.setX(panel.getTile().xCoord);
+            context.setY(panel.getTile().yCoord);
+            context.setZ(panel.getTile().zCoord);
+            context.setSide(panel.getSide());
+        }
         setOpenContext(context);
-        expandCraftingMatrix();
+        if (quickTerminal.supportsExtendedProcessing()) expandCraftingMatrix();
         blankPatternSlot = findPatternSlot(SlotRestrictedInput.PlacableItemType.BLANK_PATTERN);
         encodedPatternSlot = findPatternSlot(SlotRestrictedInput.PlacableItemType.ENCODED_PATTERN);
         loadPatternSnapshots();
@@ -135,9 +147,9 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
         if (Platform.isServer()) {
             invertedSync.set(getExtendedPatternTerminal().isInverted());
             activePageSync.set(getExtendedPatternTerminal().getActivePage());
-            processingGridSizeSync.set(getDualTerminal().getProcessingGridSize());
-            int craftingPinRows = getDualTerminal().getCraftingPinRows(getCraftingPinsRows().ordinal());
-            int playerPinRows = getDualTerminal().getPlayerPinRows(getPlayerPinsRows().ordinal());
+            processingGridSizeSync.set(quickTerminal.getProcessingGridSize());
+            int craftingPinRows = quickTerminal.getCraftingPinRows(getCraftingPinsRows().ordinal());
+            int playerPinRows = quickTerminal.getPlayerPinRows(getPlayerPinsRows().ordinal());
             applyPinRows(packPinRows(craftingPinRows, playerPinRows));
         }
 
@@ -150,9 +162,9 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
             IPatternTerminalEx terminal = getExtendedPatternTerminal();
             invertedSync.set(terminal.isInverted());
             activePageSync.set(terminal.getActivePage());
-            processingGridSizeSync.set(getDualTerminal().getProcessingGridSize());
-            craftingPinRowsSync.set(getDualTerminal().getCraftingPinRows(getCraftingPinsRows().ordinal()));
-            playerPinRowsSync.set(getDualTerminal().getPlayerPinRows(getPlayerPinsRows().ordinal()));
+            processingGridSizeSync.set(quickTerminal.getProcessingGridSize());
+            craftingPinRowsSync.set(quickTerminal.getCraftingPinRows(getCraftingPinsRows().ordinal()));
+            playerPinRowsSync.set(quickTerminal.getPlayerPinRows(getPlayerPinsRows().ordinal()));
         }
         super.detectAndSendChanges();
         // AE2's interface-terminal container assumes its actionable node can
@@ -160,39 +172,39 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
         // that node while this combined GUI is still open (for example after
         // disconnecting or moving out of range), so do not tick the delegate
         // until the node exists again.
-        if (Platform.isServer() && getDualTerminal().getActionableNode() != null) {
+        if (Platform.isServer() && quickTerminal.getActionableNode() != null) {
             interfaceDelegate.detectAndSendChanges();
         }
     }
 
     @Override
     public int getPatternInputsWidth() {
-        return 4;
+        return quickTerminal != null && !quickTerminal.supportsExtendedProcessing() ? 3 : 4;
     }
 
     @Override
     public int getPatternInputsHeigh() {
-        return 4;
+        return quickTerminal != null && !quickTerminal.supportsExtendedProcessing() ? 3 : 4;
     }
 
     @Override
     public int getPatternInputPages() {
-        return 2;
+        return quickTerminal != null && !quickTerminal.supportsExtendedProcessing() ? 1 : 2;
     }
 
     @Override
     public int getPatternOutputsWidth() {
-        return 4;
+        return quickTerminal != null && !quickTerminal.supportsExtendedProcessing() ? 1 : 4;
     }
 
     @Override
     public int getPatternOutputsHeigh() {
-        return 4;
+        return quickTerminal != null && !quickTerminal.supportsExtendedProcessing() ? 3 : 4;
     }
 
     @Override
     public int getPatternOutputPages() {
-        return 2;
+        return quickTerminal != null && !quickTerminal.supportsExtendedProcessing() ? 1 : 2;
     }
 
     /**
@@ -202,15 +214,19 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
      */
     @Override
     public PrimaryGui createPrimaryGui() {
-        return new QuickTerminalPrimaryGui(getDualTerminal().getPrimaryGuiIcon(), getDualTerminal().getInventorySlot());
+        if (quickTerminal instanceof DualTerminalGuiObject wireless) {
+            return new QuickTerminalPrimaryGui(wireless.getPrimaryGuiIcon(), wireless.getInventorySlot());
+        }
+        PartQuickEncodingTerminal panel = (PartQuickEncodingTerminal) quickTerminal;
+        return new PanelTerminalPrimaryGui(panel);
     }
 
-    private IPatternTerminalEx getExtendedPatternTerminal() {
-        return (IPatternTerminalEx) getPatternTerminal();
+    private QuickEncodingTerminalHost getExtendedPatternTerminal() {
+        return quickTerminal;
     }
 
-    private DualTerminalGuiObject getDualTerminal() {
-        return (DualTerminalGuiObject) getPatternTerminal();
+    public boolean supportsExtendedProcessing() {
+        return quickTerminal.supportsExtendedProcessing();
     }
 
     public void requestInverted(boolean inverted) {
@@ -219,7 +235,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     }
 
     public void requestProcessingGridSize(int gridSize) {
-        int normalized = gridSize == 3 ? 3 : 4;
+        int normalized = quickTerminal.supportsExtendedProcessing() && gridSize != 3 ? 4 : 3;
         processingGridSizeSync.setLocalValue(normalized);
         setProcessingGridSizeAction.send(normalized);
     }
@@ -234,17 +250,31 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
 
     /** Updates the visible tab immediately; authoritative slot contents arrive from the server action. */
     public void requestRecipeTransfer(RecipeTransferPayload payload) {
+        if (!canAccept(payload)) return;
         craftingModeSync.setLocalValue(payload.isCrafting());
         if (!payload.isCrafting()) {
             processingGridSizeSync.setLocalValue(payload.getProcessingGridSize());
             invertedSync.setLocalValue(payload.isInverted());
         }
         activePageSync.setLocalValue(0);
-        for (int slot = 0; slot < RecipeTransferPayload.SLOT_COUNT; slot++) {
+        updateTransferredSlots(payload);
+        transferRecipeAction.send(payload);
+    }
+
+    private boolean canAccept(RecipeTransferPayload payload) {
+        return payload != null && (quickTerminal.supportsExtendedProcessing() || payload.isCrafting()
+            || payload.getProcessingGridSize() == 3);
+    }
+
+    private void updateTransferredSlots(RecipeTransferPayload payload) {
+        IAEStackInventory inputs = inputsSync.get();
+        IAEStackInventory outputs = outputsSync.get();
+        for (int slot = 0; slot < inputs.getSizeInventory(); slot++) {
             updateVirtualSlot(appeng.api.storage.StorageName.CRAFTING_INPUT, slot, payload.getInput(slot));
+        }
+        for (int slot = 0; slot < outputs.getSizeInventory(); slot++) {
             updateVirtualSlot(appeng.api.storage.StorageName.CRAFTING_OUTPUT, slot, payload.getOutput(slot));
         }
-        transferRecipeAction.send(payload);
     }
 
     public void requestPlaceEncodedPattern(InterfacePatternTarget target) {
@@ -270,9 +300,9 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     }
 
     private void applyProcessingGridSize(int gridSize) {
-        int normalized = gridSize == 3 ? 3 : 4;
-        int previous = getDualTerminal().getProcessingGridSize();
-        getDualTerminal().setProcessingGridSize(normalized);
+        int normalized = quickTerminal.supportsExtendedProcessing() && gridSize != 3 ? 4 : 3;
+        int previous = quickTerminal.getProcessingGridSize();
+        quickTerminal.setProcessingGridSize(normalized);
         processingGridSizeSync.set(normalized);
         boolean currentlyCrafting = appliedCraftingModeInitialized ? appliedCraftingMode : isCraftingMode();
         if (Platform.isServer() && !currentlyCrafting && previous != normalized && normalized == 4) {
@@ -294,7 +324,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
         int craftingGroups = groupsForVisualPinRows(craftingRows);
         int playerGroups = groupsForVisualPinRows(playerRows);
 
-        getDualTerminal().setPinRows(craftingRows, playerRows);
+        quickTerminal.setPinRows(craftingRows, playerRows);
         craftingPinRowsSync.set(craftingRows);
         playerPinRowsSync.set(playerRows);
         setPinsRows(PinsRows.fromOrdinal(craftingGroups), PinsRows.fromOrdinal(playerGroups));
@@ -351,7 +381,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     }
 
     private void loadPatternSnapshots() {
-        DualTerminalGuiObject terminal = getDualTerminal();
+        QuickEncodingTerminalHost terminal = quickTerminal;
         craftingSnapshotValid = terminal.hasPatternSnapshot(true);
         processingSnapshotValid = terminal.hasPatternSnapshot(false);
         patternSnapshotsLinked = terminal.arePatternSnapshotsLinked();
@@ -380,7 +410,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
 
     private void migrateLegacyProcessingFluids() {
         if (processingSnapshotValid) return;
-        IAEStack<?>[] legacyFluids = getDualTerminal().getProcessingFluidInputs(processingInputSnapshot.length);
+        IAEStack<?>[] legacyFluids = quickTerminal.getProcessingFluidInputs(processingInputSnapshot.length);
         if (!containsStack(legacyFluids)) return;
 
         copyInventory(inputsSync.get(), processingInputSnapshot);
@@ -424,7 +454,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     private void seedProcessingFromCrafting(IAEStack<?> craftingResult) {
         clearArray(processingInputSnapshot);
         clearArray(processingOutputSnapshot);
-        boolean compact = getDualTerminal().getProcessingGridSize() == 4;
+        boolean compact = quickTerminal.getProcessingGridSize() == 4;
         int packedSlot = 0;
         for (int sourceSlot = 0; sourceSlot < 9; sourceSlot++) {
             IAEStack<?> stack = craftingInputSnapshot[sourceSlot];
@@ -454,7 +484,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     }
 
     private void persistPatternSnapshot(boolean crafting) {
-        getDualTerminal().setPatternSnapshot(
+        quickTerminal.setPatternSnapshot(
             crafting,
             crafting ? craftingInputSnapshot : processingInputSnapshot,
             crafting ? craftingOutputSnapshot : processingOutputSnapshot);
@@ -463,7 +493,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     private void persistPatternSnapshots() {
         persistPatternSnapshot(true);
         persistPatternSnapshot(false);
-        getDualTerminal().setPatternSnapshotsLinked(patternSnapshotsLinked);
+        quickTerminal.setPatternSnapshotsLinked(patternSnapshotsLinked);
     }
 
     private boolean activePatternMatches(boolean crafting) {
@@ -551,6 +581,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     }
 
     private void applyRecipeTransfer(RecipeTransferPayload payload) {
+        if (!canAccept(payload)) return;
         if (!payload.isCrafting()) {
             applyProcessingGridSize(payload.getProcessingGridSize());
             applyInverted(payload.isInverted());
@@ -559,15 +590,12 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
         getExtendedPatternTerminal().setActivePage(0);
         activePageSync.set(0);
 
-        for (int slot = 0; slot < RecipeTransferPayload.SLOT_COUNT; slot++) {
-            updateVirtualSlot(appeng.api.storage.StorageName.CRAFTING_INPUT, slot, payload.getInput(slot));
-            updateVirtualSlot(appeng.api.storage.StorageName.CRAFTING_OUTPUT, slot, payload.getOutput(slot));
-        }
+        updateTransferredSlots(payload);
         rememberActivePattern(payload.isCrafting());
         // A NEI transfer establishes a new authoritative recipe. The other
         // representation is regenerated from it on the next mode switch.
         patternSnapshotsLinked = false;
-        getDualTerminal().setPatternSnapshotsLinked(false);
+        quickTerminal.setPatternSnapshotsLinked(false);
         saveChanges();
         if (payload.shouldEncode()) encode();
     }
@@ -578,7 +606,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
             boolean activeMode = appliedCraftingModeInitialized ? appliedCraftingMode : isCraftingMode();
             patternSnapshotsLinked &= activePatternMatches(activeMode);
             rememberActivePattern(activeMode);
-            getDualTerminal().setPatternSnapshotsLinked(patternSnapshotsLinked);
+            quickTerminal.setPatternSnapshotsLinked(patternSnapshotsLinked);
         }
         super.onContainerClosed(player);
     }
@@ -691,7 +719,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     }
 
     private void refreshCraftingAvailability(InterfacePatternTarget target) {
-        if (TRACKED == null || TRACKED_BY_ID == null || getDualTerminal().getActionableNode() == null) return;
+        if (TRACKED == null || TRACKED_BY_ID == null || quickTerminal.getActionableNode() == null) return;
         try {
             Object tracker = ((Map<?, ?>) TRACKED_BY_ID.get(interfaceDelegate)).get(target.getEntryId());
             if (tracker == null) return;
@@ -704,7 +732,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
                 IGridNode node = interfaceNode(viewable);
                 ICraftingProvider provider = viewable instanceof ICraftingProvider craftingProvider ? craftingProvider
                     : null;
-                (node == null ? getDualTerminal().getActionableNode()
+                (node == null ? quickTerminal.getActionableNode()
                     .getGrid() : node.getGrid()).postEvent(new MENetworkCraftingPatternChange(provider, node));
                 return;
             }
@@ -865,6 +893,24 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
         @Override
         public void open(EntityPlayer player) {
             ItemDualTerminal.openChecked(player, slotIndex, false);
+        }
+    }
+
+    private static final class PanelTerminalPrimaryGui extends PrimaryGui {
+
+        private PanelTerminalPrimaryGui(PartQuickEncodingTerminal panel) {
+            super(panel, panel.getPrimaryGuiIcon(), panel.getTile(), panel.getSide());
+        }
+
+        @Override
+        public void open(EntityPlayer player) {
+            player.openGui(
+                dev.gtnh.qol.GTNHQolImprovements.instance,
+                TerminalGuiHandler.panelGuiId(side),
+                te.getWorldObj(),
+                te.xCoord,
+                te.yCoord,
+                te.zCoord);
         }
     }
 }

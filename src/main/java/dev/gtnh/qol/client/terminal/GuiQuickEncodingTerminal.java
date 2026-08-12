@@ -200,17 +200,17 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         buttonList.addAll(interfaceButtons);
 
         craftingModeButton = createModeButton(Blocks.crafting_table, "gtnh_qol_improvements.terminal.mode.crafting");
-        processing4ModeButton = createModeButton(
-            Blocks.dispenser,
-            "gtnh_qol_improvements.terminal.mode.processing_4x4");
+        processing4ModeButton = patternContainer.supportsExtendedProcessing()
+            ? createModeButton(Blocks.dispenser, "gtnh_qol_improvements.terminal.mode.processing_4x4")
+            : null;
         processing3ModeButton = createModeButton(Blocks.furnace, "gtnh_qol_improvements.terminal.mode.processing_3x3");
         encodeButton = new RightEncodingButton();
         patternButtons.add(craftingModeButton);
-        patternButtons.add(processing4ModeButton);
+        if (processing4ModeButton != null) patternButtons.add(processing4ModeButton);
         patternButtons.add(processing3ModeButton);
         patternButtons.add(encodeButton);
         buttonList.add(craftingModeButton);
-        buttonList.add(processing4ModeButton);
+        if (processing4ModeButton != null) buttonList.add(processing4ModeButton);
         buttonList.add(processing3ModeButton);
         buttonList.add(encodeButton);
 
@@ -406,8 +406,9 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         int panelTop = guiTop + patternPanelY();
         for (GuiButton button : patternButtons) {
             if (button instanceof GuiTabButton) {
-                button.xPosition = right
-                    + (button == craftingModeButton ? 13 : button == processing3ModeButton ? 38 : 63);
+                button.xPosition = right + (patternContainer.supportsExtendedProcessing()
+                    ? button == craftingModeButton ? 13 : button == processing3ModeButton ? 38 : 63
+                    : button == craftingModeButton ? 25 : 58);
                 button.yPosition = panelTop + PATTERN_TAB_Y;
                 continue;
             }
@@ -528,6 +529,12 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     }
 
     public void transferRecipe(RecipeTransferPayload payload, String interfaceSearch) {
+        if (!patternContainer.supportsExtendedProcessing() && !payload.isCrafting()
+            && payload.getProcessingGridSize() != 3) {
+            mc.thePlayer.addChatMessage(
+                new net.minecraft.util.ChatComponentTranslation("gtnh_qol_improvements.terminal.requires_4x4"));
+            return;
+        }
         // NEI invokes the overlay while its recipe screen is current, then
         // reinitializes this terminal when returning. Defer all interface-list
         // work until drawScreen runs on the restored terminal; otherwise AE2's

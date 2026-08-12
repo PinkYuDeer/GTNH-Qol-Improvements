@@ -12,6 +12,7 @@ import cpw.mods.fml.common.registry.GameRegistry;
 public final class QolItems {
 
     public static ItemDualTerminal dualTerminal;
+    public static ItemQuickEncodingTerminalPart panelTerminal;
 
     private QolItems() {}
 
@@ -21,6 +22,11 @@ public final class QolItems {
         dualTerminal.setTextureName("appliedenergistics2:ToolWirelessTerminal");
         dualTerminal.setCreativeTab(CreativeTabs.tabTools);
         GameRegistry.registerItem(dualTerminal, "dual_terminal");
+
+        panelTerminal = new ItemQuickEncodingTerminalPart();
+        panelTerminal.setUnlocalizedName("gtnh_qol_improvements.panel_terminal");
+        panelTerminal.setCreativeTab(CreativeTabs.tabTools);
+        GameRegistry.registerItem(panelTerminal, "panel_terminal");
     }
 
     public static void registerRecipe() {
@@ -44,6 +50,15 @@ public final class QolItems {
             .orNull();
         if (wireless != null && pattern != null && terminal != null) {
             GameRegistry.addShapelessRecipe(new ItemStack(dualTerminal), wireless, pattern, terminal);
+        }
+        ItemStack normalPattern = AEApi.instance()
+            .definitions()
+            .parts()
+            .patternTerminal()
+            .maybeStack(1)
+            .orNull();
+        if (normalPattern != null && terminal != null) {
+            GameRegistry.addShapelessRecipe(new ItemStack(panelTerminal), normalPattern, terminal.copy());
         }
         GameRegistry.addRecipe(new WirelessTerminalEnergyRecipe(new ItemStack(dualTerminal)));
         GameRegistry.addRecipe(new WirelessTerminalQuantumBridgeRecipe(new ItemStack(dualTerminal)));
