@@ -147,6 +147,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     private ModeButton processing4ModeButton;
     private ModeButton processing3ModeButton;
     private RightEncodingButton encodeButton;
+    private GuiButton craftingStatusButton;
     private boolean initializedOnce;
     private String pendingInterfaceSearch;
     private int pendingTargetSelectionTicks;
@@ -189,6 +190,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         classifyNativeButtons(nativeButtons, oldLeft, oldTop);
         buttonList.addAll(storageButtons);
         buttonList.addAll(patternButtons);
+        if (craftingStatusButton != null) buttonList.add(craftingStatusButton);
 
         interfaceButtons.clear();
         for (GuiButton button : interfaceTerminal.buttons()) {
@@ -244,9 +246,17 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         storageButtons.clear();
         patternButtons.clear();
         pinStateButton = null;
+        craftingStatusButton = null;
 
         for (GuiButton button : buttons) {
-            if (button.xPosition < oldLeft) {
+            if (button instanceof GuiImgButton image && image.getSetting() == Settings.CRAFTING_STATUS) {
+                craftingStatusButton = button;
+            } else if (button instanceof GuiTabButton && button.yPosition <= oldTop + 20) {
+                // AE2 can render Crafting Status either as an image button or
+                // as a tab. Keep the native instance so its tooltip, texture
+                // and PacketSwitchGuis behaviour remain resource-pack aware.
+                craftingStatusButton = button;
+            } else if (button.xPosition < oldLeft) {
                 storageButtons.add(button);
             } else if (button instanceof GuiTabButton && button.yPosition > oldTop + 20) {
                 // Replaced below with three always-visible, directly selectable
@@ -376,6 +386,20 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     }
 
     private void layoutButtons() {
+        if (craftingStatusButton != null) {
+            if (craftingStatusButton instanceof GuiTabButton) {
+                // GuiTabButton draws a 25 px frame despite reporting a 22 px
+                // width. AE2's vanilla frame also contains a four-pixel top
+                // connector, so keep the native offsets to make both edges
+                // meet the interface terminal background cleanly.
+                craftingStatusButton.xPosition = guiLeft + xSize - 25;
+                craftingStatusButton.yPosition = guiTop - 4;
+            } else {
+                craftingStatusButton.xPosition = guiLeft + xSize - 18;
+                craftingStatusButton.yPosition = guiTop;
+            }
+        }
+
         // Interface and storage have independent controls. Interface controls
         // keep their original column beside the central terminal.
         int interfaceColumnX = guiLeft + BUTTON_COLUMN_X;
@@ -755,6 +779,13 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
+        // This screen contains four independent search fields. Clear them all
+        // first, then let the field under the cursor regain focus later in the
+        // normal click dispatch. This also makes clicks in Encoding, ME Storage
+        // and otherwise empty NEI space consistently release keyboard focus.
+        searchField.setFocused(false);
+        interfaceTerminal.clearSearchFocus();
+
         if ((button == 0 || button == 1) && isInsideStoragePanel(mouseX, mouseY)) {
             // The storage panel is deliberately outside xSize. Mark the whole
             // visible panel as GUI space so clicking its search/background never
@@ -808,6 +839,14 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     @Override
     protected boolean handleVirtualSlotClick(VirtualMESlot slot, int mouseButton) {
         boolean handled = super.handleVirtualSlotClick(slot, mouseButton);
+        if (slot instanceof VirtualMEPatternSlot) {
+            // AEBaseGui applies the phantom stack but deliberately returns
+            // false. Our encoding panel is outside the native GuiContainer
+            // rectangle, so allowing the click to continue would also send an
+            // outside-slot (-999) click and throw the held stack on the ground.
+            suppressExtensionVanillaClick(mouseButton);
+            return true;
+        }
         if (handled && slot instanceof VirtualMEMonitorableSlot) suppressExtensionVanillaClick(mouseButton);
         return handled;
     }
