@@ -19,7 +19,11 @@ import net.minecraftforge.common.util.ForgeDirection;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.world.BlockEvent;
 
+import appeng.api.parts.IPartHost;
+import appeng.api.parts.SelectedPart;
 import appeng.api.util.IOrientable;
+import appeng.core.CommonHelper;
+import appeng.parts.PartPlacement;
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
@@ -129,7 +133,8 @@ public final class VajraEventHandler {
 
         HitData hit = getHitData(event.entityPlayer, event.x, event.y, event.z);
         handlePreciseToolClick(event.entityPlayer, event.x, event.y, event.z, event.face, hit.x, hit.y, hit.z);
-        if (isWrenchTarget(tile, block, world, event.x, event.y, event.z)) {
+        if (isWrenchTarget(tile, block, world, event.x, event.y, event.z)
+            || event.entityPlayer.isSneaking() && PartPlacement.getExistingHost(tile) != null) {
             consumeBlockClick(event);
         }
     }
@@ -151,7 +156,8 @@ public final class VajraEventHandler {
         World world = player.worldObj;
         TileEntity tile = world.getTileEntity(x, y, z);
         Block block = world.getBlock(x, y, z);
-        if (!isWrenchTarget(tile, block, world, x, y, z)) {
+        IPartHost aePartHost = player.isSneaking() ? PartPlacement.getExistingHost(tile) : null;
+        if (aePartHost == null && !isWrenchTarget(tile, block, world, x, y, z)) {
             return;
         }
 
@@ -159,6 +165,10 @@ public final class VajraEventHandler {
         hitX = clamp(hitX);
         hitY = clamp(hitY);
         hitZ = clamp(hitZ);
+        if (aePartHost != null) {
+            dismantleAePart(player, world, x, y, z, hitX, hitY, hitZ, aePartHost);
+            return;
+        }
         ForgeDirection clickedSide = ForgeDirection.getOrientation(face);
         ForgeDirection wrenchingSide = GTUtility.determineWrenchingSide(clickedSide, hitX, hitY, hitZ);
         if (tile instanceof IGregTechTileEntity) {
@@ -219,6 +229,29 @@ public final class VajraEventHandler {
             GTUtility
                 .sendSoundToPlayers(world, SoundResource.GTCEU_OP_WRENCH, 1.0F, 1.0F, x + 0.5D, y + 0.5D, z + 0.5D);
         }
+    }
+
+    /** Uses AE2's native wrench path so the precisely selected part or facade is dropped. */
+    private static boolean dismantleAePart(EntityPlayer player, World world, int x, int y, int z, float hitX,
+        float hitY, float hitZ, IPartHost host) {
+        if (!canSpendEnergy(player.getHeldItem(), player)) {
+            return false;
+        }
+
+        SelectedPart selected;
+        CommonHelper.proxy.updateRenderMode(player);
+        try {
+            selected = host.selectPart(Vec3.createVectorHelper(hitX, hitY, hitZ));
+        } finally {
+            CommonHelper.proxy.updateRenderMode(null);
+        }
+        if (selected == null || selected.part == null && selected.facade == null
+            || !PartPlacement.wrenchLogic(player, world, x, y, z, host, selected)) {
+            return false;
+        }
+
+        spendEnergy(player.getHeldItem(), player);
+        return true;
     }
 
     /** Keep both cable endpoints and both client connection masks in the same state. */

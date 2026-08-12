@@ -149,6 +149,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     private RightEncodingButton encodeButton;
     private GuiButton craftingStatusButton;
     private boolean initializedOnce;
+    private boolean pendingPinRefresh;
     private String pendingInterfaceSearch;
     private int pendingTargetSelectionTicks;
     private boolean pendingAutoPlace;
@@ -229,6 +230,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         layoutButtons();
         layoutPatternSlots();
         layoutContainerSlots();
+        pendingPinRefresh = true;
 
         // Returning from NEI or another GUI calls initGui again on the same
         // screen. Focus only the first initialization so recipe hotkeys such as
@@ -603,6 +605,10 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        if (pendingPinRefresh) {
+            pendingPinRefresh = false;
+            patternContainer.requestPinRefresh();
+        }
         if (configuredTerminalStyle != currentTerminalStyle()) {
             setWorldAndResolution(mc, width, height);
         }

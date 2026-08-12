@@ -68,6 +68,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     public final ActionHandler<Boolean> setInvertedAction;
     public final ActionHandler<Integer> setProcessingGridSizeAction;
     public final ActionHandler<Integer> setPinRowsAction;
+    public final ActionHandler<Void> refreshPinsAction;
     public final ActionHandler<RecipeTransferPayload> transferRecipeAction;
     public final ActionHandler<InterfacePatternTarget> placeEncodedPatternAction;
     public final ActionHandler<Integer> takeBlankPatternAction;
@@ -132,6 +133,8 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
             .onServerAction(this::applyProcessingGridSize);
         setPinRowsAction = sync.actionC2S("setPinRows", StreamCodecs.intValue())
             .onServerAction(this::applyPinRows);
+        refreshPinsAction = sync.actionC2S("refreshPins")
+            .onServerAction(() -> updatePins(true));
         transferRecipeAction = sync.actionC2S("transferRecipe", RecipeTransferPayload.CODEC)
             .onServerAction(this::applyRecipeTransfer);
         placeEncodedPatternAction = sync.actionC2S("placeEncodedPattern", InterfacePatternTarget.CODEC)
@@ -246,6 +249,15 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
         craftingPinRowsSync.setLocalValue(normalizedCrafting);
         playerPinRowsSync.setLocalValue(normalizedPlayer);
         setPinRowsAction.send(packPinRows(normalizedCrafting, normalizedPlayer));
+    }
+
+    /**
+     * Craft confirmation can update pins while this terminal is not the current
+     * client screen, causing AE2's immediate PacketPinsUpdate to be ignored.
+     * Request the authoritative list again whenever the terminal is restored.
+     */
+    public void requestPinRefresh() {
+        refreshPinsAction.send();
     }
 
     /** Updates the visible tab immediately; authoritative slot contents arrive from the server action. */
