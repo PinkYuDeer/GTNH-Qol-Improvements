@@ -12,6 +12,8 @@ import net.minecraft.item.ItemStack;
 
 import org.lwjgl.input.Keyboard;
 
+import com.glodblock.github.common.item.ItemFluidDrop;
+import com.glodblock.github.common.item.ItemFluidPacket;
 import com.glodblock.github.util.Util;
 
 import appeng.api.AEApi;
@@ -27,6 +29,7 @@ import dev.gtnh.qol.config.QolConfig;
 import dev.gtnh.qol.terminal.RecipeTransferPayload;
 import gregtech.api.enums.ItemList;
 import gregtech.common.config.Gregtech;
+import gregtech.common.items.ItemFluidDisplay;
 import gregtech.nei.GTNEIDefaultHandler;
 import gregtech.nei.GTNEIDefaultHandler.FixedPositionedStack;
 
@@ -283,7 +286,12 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
     private static IAEStack<?> toAEStack(PositionedStack positioned, ItemStack item, boolean allowFluid) {
         if (item == null) return null;
         ItemStack copy = item.copy();
-        IAEStack<?> fluid = allowFluid ? Util.getAEFluidFromItem(copy) : null;
+        // A filled cell or another real fluid container is still an item
+        // ingredient. Converting every container through getAEFluidFromItem
+        // breaks machines such as the single-block mixer, which can accept a
+        // cell but cannot accept a second fluid input. Only NEI's synthetic
+        // fluid representations should become an AE fluid stack.
+        IAEStack<?> fluid = allowFluid && isFluidDisplay(copy) ? Util.getAEFluidFromItem(copy) : null;
         if (fluid != null) return fluid;
 
         IAEStack<?> result = AEItemStack.create(copy);
@@ -293,6 +301,11 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
             result.setStackSize(fixed.realStackSize);
         }
         return result;
+    }
+
+    private static boolean isFluidDisplay(ItemStack stack) {
+        return stack.getItem() instanceof ItemFluidDisplay || stack.getItem() instanceof ItemFluidDrop
+            || stack.getItem() instanceof ItemFluidPacket;
     }
 
     private static IAEStack<?> toAEStack(ItemStack item) {

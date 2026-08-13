@@ -38,6 +38,7 @@ import appeng.api.config.StringOrder;
 import appeng.api.config.TerminalStyle;
 import appeng.api.storage.ITerminalHost;
 import appeng.api.storage.data.IAEStack;
+import appeng.api.storage.data.IItemList;
 import appeng.client.gui.IInterfaceTerminalPostUpdate;
 import appeng.client.gui.ScreenColor;
 import appeng.client.gui.implementations.GuiInterfaceTerminal;
@@ -98,7 +99,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     private static final int PATTERN_BLANK_SLOT_X = 20;
     private static final int PATTERN_ENCODE_BUTTON_X = 42;
     private static final int PATTERN_ENCODED_SLOT_X = 64;
-    private static final int PATTERN_PATTERN_ROW_Y = 139;
+    private static final int PATTERN_PATTERN_ROW_Y = 140;
     private static final int PATTERN_TAB_Y = 167;
     private static final int ITEM_COLUMNS = 4;
     private static final int DEFAULT_ITEM_ROWS = 4;
@@ -128,6 +129,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         "textures/gui/widget/encoding4_inverted.png");
 
     private static final Field ITEM_REPO = findField(GuiMEMonitorable.class, "repo");
+    private static final Field ITEM_REPO_LIST = findField(ItemRepo.class, "list");
     private static final Field PATTERN_GUI_CRAFTING_MODE = findField(GuiPatternTerm.class, "craftingMode");
 
     private final ContainerQuickEncodingTerminal patternContainer;
@@ -231,6 +233,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         buttonList.add(invertButton);
 
         configureItemPanel();
+        registerCraftableIngredientOverlays();
         layoutButtons();
         layoutPatternSlots();
         layoutContainerSlots();
@@ -339,6 +342,31 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
                 type -> typeFilters == null || typeFilters.isEnabled(type));
             monitorableSlots[i] = slot;
             registerVirtualSlots(slot);
+        }
+    }
+
+    /**
+     * Draw AE2's encoded-pattern badge over recipe ingredients that are
+     * already craftable on the connected network. Keep this as a separate
+     * render-only virtual slot so the recipe stack synchronized by the
+     * container never receives transient network state.
+     */
+    private void registerCraftableIngredientOverlays() {
+        if (craftingSlots == null) return;
+        for (VirtualMEPatternSlot slot : craftingSlots) {
+            registerVirtualSlots(new CraftableIngredientOverlaySlot(slot));
+        }
+    }
+
+    private boolean isCraftableOnNetwork(IAEStack<?> ingredient) {
+        if (ingredient == null || itemRepo == null || ITEM_REPO_LIST == null) return false;
+        try {
+            @SuppressWarnings("unchecked")
+            IItemList<IAEStack<?>> networkStacks = (IItemList<IAEStack<?>>) ITEM_REPO_LIST.get(itemRepo);
+            IAEStack<?> networkStack = networkStacks == null ? null : networkStacks.findPrecise(ingredient);
+            return networkStack != null && networkStack.isCraftable();
+        } catch (IllegalAccessException ignored) {
+            return false;
         }
     }
 
@@ -1137,6 +1165,41 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             return field;
         } catch (ReflectiveOperationException ignored) {
             return null;
+        }
+    }
+
+    private final class CraftableIngredientOverlaySlot extends VirtualMESlot {
+
+        private final VirtualMEPatternSlot ingredientSlot;
+
+        private CraftableIngredientOverlaySlot(VirtualMEPatternSlot ingredientSlot) {
+            super(0, 0, ingredientSlot.getSlotIndex());
+            this.ingredientSlot = ingredientSlot;
+        }
+
+        @Override
+        public IAEStack<?> getAEStack() {
+            return ingredientSlot.getAEStack();
+        }
+
+        @Override
+        public boolean isHovered(int mouseX, int mouseY) {
+            return false;
+        }
+
+        @Override
+        public boolean drawStackAndOverlay(Minecraft minecraft, int mouseX, int mouseY) {
+            IAEStack<?> ingredient = ingredientSlot.getAEStack();
+            if (ingredientSlot.isHidden() || !isCraftableOnNetwork(ingredient)) return false;
+
+            // AEStack's native overlay draws the same small encoded-pattern
+            // icon used by AE2's terminal item slots. Render from a copy so
+            // craftability never leaks into the synchronized recipe inventory.
+            IAEStack<?> overlay = ingredient.copy();
+            if (overlay.getStackSize() <= 0) overlay.setStackSize(1);
+            overlay.setCraftable(true);
+            overlay.drawOverlayInGui(minecraft, ingredientSlot.getX(), ingredientSlot.getY(), false, false, true, true);
+            return false;
         }
     }
 
