@@ -839,6 +839,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         // and otherwise empty NEI space consistently release keyboard focus.
         searchField.setFocused(false);
         interfaceTerminal.clearSearchFocus();
+        interfaceTerminal.cancelScrollDrag();
 
         if ((button == 0 || button == 1) && isInsideStoragePanel(mouseX, mouseY)) {
             // The storage panel is deliberately outside xSize. Mark the whole
@@ -891,6 +892,12 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     }
 
     @Override
+    protected void mouseClickMove(int mouseX, int mouseY, int button, long timeSinceLastClick) {
+        interfaceTerminal.dragScrollBar(mouseY, button);
+        super.mouseClickMove(mouseX, mouseY, button, timeSinceLastClick);
+    }
+
+    @Override
     protected boolean handleVirtualSlotClick(VirtualMESlot slot, int mouseButton) {
         boolean handled = super.handleVirtualSlotClick(slot, mouseButton);
         if (slot instanceof VirtualMEPatternSlot) {
@@ -920,6 +927,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     @Override
     protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
         super.mouseMovedOrUp(mouseX, mouseY, state);
+        if (state == 0) interfaceTerminal.cancelScrollDrag();
         if (state == suppressExtensionButton) {
             suppressExtensionButton = -1;
             suppressExtensionClickUntil = 0;
@@ -950,7 +958,15 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             }
             return true;
         }
-        if (mouseX >= guiLeft && mouseX < guiLeft + xSize && interfaceTerminal.wheel(mouseX, mouseY, wheel)) {
+        if (isInsideStoragePanel(mouseX, mouseY)) {
+            getScrollBar().wheel(wheel);
+            return true;
+        }
+        if (mouseX >= guiLeft && mouseX < guiLeft + xSize && mouseY >= guiTop && mouseY < guiTop + ySize) {
+            // Consume the entire central panel. GuiMEMonitorable's fallback
+            // otherwise sends an unhandled wheel event to the ME Storage
+            // scrollbar even though that panel lives on the far left.
+            interfaceTerminal.wheel(mouseX, mouseY, wheel);
             return true;
         }
         return super.mouseWheelEvent(mouseX, mouseY, wheel);
@@ -1361,6 +1377,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
         private Object highlightedEntry;
         private InterfacePatternTarget highlightedTarget;
+        private boolean scrollBarDragging;
 
         private EmbeddedInterfaceTerminal(Container container) {
             super(container);
@@ -1434,6 +1451,11 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
                 MEGuiTextField field = textField(search);
                 if (field != null) field.mouseClicked(mouseX, mouseY, button);
             }
+            GuiScrollbar scrollbar = getScrollBar();
+            int relativeX = mouseX - guiLeft;
+            int relativeY = mouseY - guiTop;
+            scrollBarDragging = button == 0 && scrollbar.contains(relativeX, relativeY);
+            scrollbar.click(this, relativeX, relativeY);
             if (MASTER_LIST == null) return;
             try {
                 Object masterList = MASTER_LIST.get(this);
@@ -1445,7 +1467,23 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         }
 
         private boolean wheel(int mouseX, int mouseY, int wheel) {
-            return super.mouseWheelEvent(mouseX, mouseY, wheel);
+            GuiScrollbar scrollbar = getScrollBar();
+            int relativeY = mouseY - guiTop;
+            boolean insideScrollBand = mouseX > guiLeft && mouseX <= guiLeft + xSize
+                && relativeY > scrollbar.getTop()
+                && relativeY <= scrollbar.getTop() + scrollbar.getHeight();
+            if (!insideScrollBand) return false;
+            if (super.mouseWheelEvent(mouseX, mouseY, wheel)) return true;
+            scrollbar.wheel(wheel);
+            return true;
+        }
+
+        private void dragScrollBar(int mouseY, int button) {
+            if (scrollBarDragging && button == 0) getScrollBar().clickMove(mouseY - guiTop);
+        }
+
+        private void cancelScrollDrag() {
+            scrollBarDragging = false;
         }
 
         private void perform(GuiButton button) {
