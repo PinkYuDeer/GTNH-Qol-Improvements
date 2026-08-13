@@ -16,5 +16,7 @@ gtnh_qol_improvements.terminal.mode.crafting=合成样板
 gtnh_qol_improvements.terminal.mode.processing_4x4=4x4 处理样板
 gtnh_qol_improvements.terminal.mode.processing_3x3=3x3 处理样板
 gtnh_qol_improvements.terminal.encode_alt_upload=按住 ALT 编码并直接上传
+gtnh_qol_improvements.terminal.mouse_wheel=鼠标滚轮
+gtnh_qol_improvements.terminal.cycle_alternatives=切换配方同类物品
 gtnh_qol_improvements.nei.encode_search_upload=编码 + 搜索 + 上传
 gtnh_qol_improvements.nei.middle_click_order=自动合成下单

@@ -6,6 +6,7 @@ import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.StatCollector;
 
+import appeng.client.gui.implementations.GuiMEMonitorable;
 import codechicken.nei.BookmarkPanel;
 import codechicken.nei.LayoutManager;
 import codechicken.nei.bookmark.BookmarksGridSlot;
@@ -13,7 +14,6 @@ import codechicken.nei.guihook.GuiContainerManager;
 import codechicken.nei.guihook.IContainerInputHandler;
 import codechicken.nei.guihook.IContainerTooltipHandler;
 import codechicken.nei.util.NEIMouseUtils;
-import dev.gtnh.qol.client.terminal.GuiQuickEncodingTerminal;
 import dev.gtnh.qol.config.QolConfig;
 import dev.gtnh.qol.network.QolNetwork;
 
@@ -34,7 +34,7 @@ final class BookmarkCraftHandler implements IContainerInputHandler, IContainerTo
     @Override
     public boolean mouseClicked(GuiContainer gui, int mouseX, int mouseY, int button) {
         if (!QolConfig.middleClickOrdering || button != NEIMouseUtils.MOUSE_BTN_MMB
-            || !(gui instanceof GuiQuickEncodingTerminal)) {
+            || !(gui instanceof GuiMEMonitorable)) {
             return false;
         }
         BookmarksGridSlot slot = bookmarkSlotAt(mouseX, mouseY);
@@ -57,7 +57,7 @@ final class BookmarkCraftHandler implements IContainerInputHandler, IContainerTo
 
     @Override
     public Map<String, String> handleHotkeys(GuiContainer gui, int mouseX, int mouseY, Map<String, String> hotkeys) {
-        if (QolConfig.middleClickOrdering && gui instanceof GuiQuickEncodingTerminal
+        if (QolConfig.middleClickOrdering && gui instanceof GuiMEMonitorable
             && bookmarkSlotAt(mouseX, mouseY) != null) {
             hotkeys.put(
                 NEIMouseUtils.getKeyName(NEIMouseUtils.MOUSE_BTN_MMB),

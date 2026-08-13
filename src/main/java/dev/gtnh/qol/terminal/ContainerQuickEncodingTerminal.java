@@ -70,6 +70,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     public final ActionHandler<Integer> setPinRowsAction;
     public final ActionHandler<Void> refreshPinsAction;
     public final ActionHandler<RecipeTransferPayload> transferRecipeAction;
+    public final ActionHandler<RecipeIngredientReplacement> replaceRecipeIngredientAction;
     public final ActionHandler<InterfacePatternTarget> placeEncodedPatternAction;
     public final ActionHandler<Integer> takeBlankPatternAction;
     public final ActionHandler<Integer> takeEncodedPatternAction;
@@ -137,6 +138,8 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
             .onServerAction(() -> updatePins(true));
         transferRecipeAction = sync.actionC2S("transferRecipe", RecipeTransferPayload.CODEC)
             .onServerAction(this::applyRecipeTransfer);
+        replaceRecipeIngredientAction = sync.actionC2S("replaceRecipeIngredient", RecipeIngredientReplacement.CODEC)
+            .onServerAction(this::replaceRecipeIngredient);
         placeEncodedPatternAction = sync.actionC2S("placeEncodedPattern", InterfacePatternTarget.CODEC)
             .onServerAction(this::placeEncodedPattern);
         takeBlankPatternAction = sync.actionC2S("takeBlankPattern", StreamCodecs.intValue())
@@ -273,6 +276,13 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
         transferRecipeAction.send(payload);
     }
 
+    public void requestRecipeIngredientReplacement(IAEStack<?> from, IAEStack<?> to) {
+        if (from == null || to == null || !from.isItem() || !to.isItem()) return;
+        RecipeIngredientReplacement replacement = new RecipeIngredientReplacement(from, to);
+        replaceIngredientLocally(replacement);
+        replaceRecipeIngredientAction.send(replacement);
+    }
+
     private boolean canAccept(RecipeTransferPayload payload) {
         return payload != null && (quickTerminal.supportsExtendedProcessing() || payload.isCrafting()
             || payload.getProcessingGridSize() == 3);
@@ -287,6 +297,30 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
         for (int slot = 0; slot < outputs.getSizeInventory(); slot++) {
             updateVirtualSlot(appeng.api.storage.StorageName.CRAFTING_OUTPUT, slot, payload.getOutput(slot));
         }
+    }
+
+    private void replaceRecipeIngredient(RecipeIngredientReplacement replacement) {
+        if (!replaceIngredientLocally(replacement)) return;
+        boolean crafting = appliedCraftingModeInitialized ? appliedCraftingMode : isCraftingMode();
+        rememberActivePattern(crafting);
+        patternSnapshotsLinked = false;
+        quickTerminal.setPatternSnapshotsLinked(false);
+        saveChanges();
+    }
+
+    private boolean replaceIngredientLocally(RecipeIngredientReplacement replacement) {
+        IAEStack<?> from = replacement == null ? null : replacement.getFrom();
+        IAEStack<?> to = replacement == null ? null : replacement.getTo();
+        if (from == null || to == null || !from.isItem() || !to.isItem()) return false;
+        boolean changed = false;
+        IAEStackInventory inputs = inputsSync.get();
+        for (int slot = 0; slot < inputs.getSizeInventory(); slot++) {
+            IAEStack<?> current = inputs.getAEStackInSlot(slot);
+            if (current == null || !current.isSameType(from)) continue;
+            updateVirtualSlot(appeng.api.storage.StorageName.CRAFTING_INPUT, slot, to.copy());
+            changed = true;
+        }
+        return changed;
     }
 
     public void requestPlaceEncodedPattern(InterfacePatternTarget target) {

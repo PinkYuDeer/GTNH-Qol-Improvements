@@ -1,6 +1,7 @@
 package dev.gtnh.qol.client.nei;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.Locale;
@@ -47,19 +48,26 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
         try {
             boolean crafting = isCraftingRecipe(recipe);
             boolean virtualizeNonConsumed = !crafting && ProgrammableHatchesCompat.canVirtualizeNonConsumedInputs();
-            IAEStack<?>[] inputs = crafting ? collectCraftingInputs(recipe, recipeIndex)
+            RecipeInputs collectedInputs = crafting ? collectCraftingInputs(recipe, recipeIndex)
                 : collectProcessingInputs(recipe, recipeIndex, virtualizeNonConsumed);
             IAEStack<?>[] outputs = crafting ? new IAEStack<?>[RecipeTransferPayload.SLOT_COUNT]
                 : collectProcessingOutputs(recipe, recipeIndex);
-            int inputCount = countStacks(inputs);
+            int inputCount = countStacks(collectedInputs.stacks);
             int outputCount = countStacks(outputs);
             int processingGridSize = !crafting && (inputCount > 9 || outputCount > 3) ? 4 : 3;
             boolean inverted = !crafting && processingGridSize == 4 && inputCount <= 4 && outputCount > 4;
             boolean encode = QolConfig.dualTerminal && isAltDown();
 
             terminal.transferRecipe(
-                new RecipeTransferPayload(crafting, encode, processingGridSize, inverted, inputs, outputs),
-                interfaceSearchText(recipe, recipeIndex, crafting, virtualizeNonConsumed));
+                new RecipeTransferPayload(
+                    crafting,
+                    encode,
+                    processingGridSize,
+                    inverted,
+                    collectedInputs.stacks,
+                    outputs),
+                interfaceSearchText(recipe, recipeIndex, crafting, virtualizeNonConsumed),
+                collectedInputs.alternatives);
         } catch (RuntimeException | LinkageError failure) {
             AELog.warn(failure, "Failed to transfer an NEI recipe to the quick encoding terminal");
         }
@@ -152,8 +160,8 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
         } catch (IllegalFormatException ignored) {}
     }
 
-    private static IAEStack<?>[] collectCraftingInputs(IRecipeHandler recipe, int recipeIndex) {
-        IAEStack<?>[] result = new IAEStack<?>[RecipeTransferPayload.SLOT_COUNT];
+    private static RecipeInputs collectCraftingInputs(IRecipeHandler recipe, int recipeIndex) {
+        RecipeInputs result = new RecipeInputs();
         int fallbackSlot = 0;
         for (PositionedStack positioned : safeList(recipe.getIngredientStacks(recipeIndex))) {
             if (positioned == null) continue;
@@ -163,14 +171,15 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
             fallbackSlot = Math.max(fallbackSlot, slot + 1);
             if (slot >= 9) continue;
             IAEStack<?> stack = toAEStack(positioned, false);
-            if (stack != null) result[slot] = stack.setStackSize(1);
+            if (stack != null) result.stacks[slot] = stack.setStackSize(1);
+            result.alternatives[slot] = collectAlternatives(positioned, false, false);
         }
         return result;
     }
 
-    private static IAEStack<?>[] collectProcessingInputs(IRecipeHandler recipe, int recipeIndex,
+    private static RecipeInputs collectProcessingInputs(IRecipeHandler recipe, int recipeIndex,
         boolean virtualizeNonConsumed) {
-        IAEStack<?>[] result = new IAEStack<?>[RecipeTransferPayload.SLOT_COUNT];
+        RecipeInputs result = new RecipeInputs();
         int slot = 0;
         for (PositionedStack positioned : safeList(recipe.getIngredientStacks(recipeIndex))) {
             IAEStack<?> stack;
@@ -187,10 +196,38 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
                 stack = toAEStack(positioned, true);
             }
             if (stack == null) continue;
-            if (slot >= result.length) break;
-            result[slot++] = stack;
+            if (slot >= result.stacks.length) break;
+            result.stacks[slot] = stack;
+            result.alternatives[slot] = collectAlternatives(
+                positioned,
+                true,
+                virtualizeNonConsumed && isNonConsumedInput(positioned));
+            slot++;
         }
         return result;
+    }
+
+    private static List<IAEStack<?>> collectAlternatives(PositionedStack positioned, boolean allowFluid,
+        boolean virtualize) {
+        if (positioned == null || positioned.items == null || positioned.items.length == 0) {
+            return Collections.emptyList();
+        }
+        List<IAEStack<?>> alternatives = new ArrayList<>();
+        for (ItemStack item : positioned.items) {
+            if (item == null) continue;
+            ItemStack candidate = virtualize ? ProgrammableHatchesCompat.wrapVirtualItem(item) : item;
+            IAEStack<?> alternative = virtualize ? toAEStack(candidate) : toAEStack(positioned, candidate, allowFluid);
+            if (alternative == null || containsSameType(alternatives, alternative)) continue;
+            alternatives.add(alternative);
+        }
+        return alternatives;
+    }
+
+    private static boolean containsSameType(List<IAEStack<?>> alternatives, IAEStack<?> candidate) {
+        for (IAEStack<?> alternative : alternatives) {
+            if (alternative.isSameType(candidate)) return true;
+        }
+        return false;
     }
 
     private static IAEStack<?>[] collectProcessingOutputs(IRecipeHandler recipe, int recipeIndex) {
@@ -215,15 +252,11 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
 
     private static IAEStack<?> toAEStack(PositionedStack positioned, boolean allowFluid) {
         if (positioned == null) return null;
-        ItemStack item = positioned.item;
-        if (item == null && positioned.items != null) {
-            for (ItemStack alternative : positioned.items) {
-                if (alternative != null) {
-                    item = alternative;
-                    break;
-                }
-            }
-        }
+        ItemStack item = selectedItem(positioned);
+        return toAEStack(positioned, item, allowFluid);
+    }
+
+    private static IAEStack<?> toAEStack(PositionedStack positioned, ItemStack item, boolean allowFluid) {
         if (item == null) return null;
         ItemStack copy = item.copy();
         IAEStack<?> fluid = allowFluid ? Util.getAEFluidFromItem(copy) : null;
@@ -259,5 +292,16 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
 
     private static boolean isAltDown() {
         return Keyboard.isKeyDown(Keyboard.KEY_LMENU) || Keyboard.isKeyDown(Keyboard.KEY_RMENU);
+    }
+
+    private static final class RecipeInputs {
+
+        private final IAEStack<?>[] stacks = new IAEStack<?>[RecipeTransferPayload.SLOT_COUNT];
+        @SuppressWarnings("unchecked")
+        private final List<IAEStack<?>>[] alternatives = new List[RecipeTransferPayload.SLOT_COUNT];
+
+        private RecipeInputs() {
+            java.util.Arrays.fill(alternatives, Collections.emptyList());
+        }
     }
 }

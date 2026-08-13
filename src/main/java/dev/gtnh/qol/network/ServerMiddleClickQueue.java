@@ -21,6 +21,7 @@ import appeng.api.storage.data.IAEItemStack;
 import appeng.container.ContainerOpenContext;
 import appeng.container.PrimaryGui;
 import appeng.container.implementations.ContainerCraftAmount;
+import appeng.container.implementations.ContainerMEMonitorable;
 import appeng.core.sync.GuiBridge;
 import appeng.util.Platform;
 import appeng.util.item.AEItemStack;
@@ -57,8 +58,7 @@ public final class ServerMiddleClickQueue {
 
     private static void process(Request request) {
         EntityPlayerMP player = request.player;
-        if (!QolConfig.middleClickOrdering || !QolConfig.dualTerminal
-            || player == null
+        if (!QolConfig.middleClickOrdering || player == null
             || player.playerNetServerHandler == null
             || request.stack == null
             || request.stack.getItem() == null) {
@@ -74,6 +74,7 @@ public final class ServerMiddleClickQueue {
         target.setStackSize(1);
 
         if (request.worldBlock) {
+            if (!QolConfig.dualTerminal) return;
             processWorldBlock(player, request.hotbarSlot, targetStack, target);
         } else {
             processBookmark(player, target, request.amount);
@@ -81,7 +82,7 @@ public final class ServerMiddleClickQueue {
     }
 
     private static void processBookmark(EntityPlayerMP player, IAEItemStack target, long amount) {
-        if (!(player.openContainer instanceof ContainerQuickEncodingTerminal container)
+        if (!(player.openContainer instanceof ContainerMEMonitorable container)
             || !isCraftable(container.getNetworkNode(), target, player)) {
             return;
         }
@@ -200,8 +201,8 @@ public final class ServerMiddleClickQueue {
         return block != null && block != Blocks.air;
     }
 
-    private static void openCraftAmount(EntityPlayerMP player, ContainerQuickEncodingTerminal container,
-        IAEItemStack target, long initialAmount) {
+    private static void openCraftAmount(EntityPlayerMP player, ContainerMEMonitorable container, IAEItemStack target,
+        long initialAmount) {
         container.setTargetStack(target);
         PrimaryGui primaryGui = container.createPrimaryGui();
         ContainerOpenContext context = container.getOpenContext();

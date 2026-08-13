@@ -16,5 +16,7 @@ gtnh_qol_improvements.terminal.mode.crafting=Crafting Pattern
 gtnh_qol_improvements.terminal.mode.processing_4x4=4x4 Processing Pattern
 gtnh_qol_improvements.terminal.mode.processing_3x3=3x3 Processing Pattern
 gtnh_qol_improvements.terminal.encode_alt_upload=Hold ALT to encode and upload directly
+gtnh_qol_improvements.terminal.mouse_wheel=MOUSE WHEEL
+gtnh_qol_improvements.terminal.cycle_alternatives=Cycle Recipe Alternatives
 gtnh_qol_improvements.nei.encode_search_upload=Encode + search + upload
 gtnh_qol_improvements.nei.middle_click_order=Order autocrafting

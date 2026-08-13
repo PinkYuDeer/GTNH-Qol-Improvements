@@ -20,6 +20,7 @@ import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.StatCollector;
 
@@ -103,6 +104,9 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     private static final int DEFAULT_ITEM_ROWS = 4;
     private static final int DEFAULT_STORAGE_BUTTONS_PER_COLUMN = 4;
     private static final int GL_CLIENT_ALL_ATTRIB_BITS = 0xFFFFFFFF;
+
+    @SuppressWarnings("unchecked")
+    private final List<IAEStack<?>>[] recipeInputAlternatives = new List[RecipeTransferPayload.SLOT_COUNT];
 
     private static final ResourceLocation ITEM_PANEL = new ResourceLocation(
         GTNHQolImprovements.MOD_ID,
@@ -554,7 +558,8 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         } catch (IllegalAccessException ignored) {}
     }
 
-    public void transferRecipe(RecipeTransferPayload payload, String interfaceSearch) {
+    public void transferRecipe(RecipeTransferPayload payload, String interfaceSearch,
+        List<IAEStack<?>>[] inputAlternatives) {
         if (!patternContainer.supportsExtendedProcessing() && !payload.isCrafting()
             && payload.getProcessingGridSize() != 3) {
             mc.thePlayer.addChatMessage(
@@ -569,9 +574,22 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         pendingInterfaceSearch = interfaceSearch == null ? "" : interfaceSearch;
         pendingTargetSelectionTicks = 0;
         pendingAutoPlace = payload.shouldEncode();
+        rememberRecipeAlternatives(inputAlternatives);
         patternContainer.requestRecipeTransfer(payload);
         layoutButtons();
         layoutPatternSlots();
+    }
+
+    private void rememberRecipeAlternatives(List<IAEStack<?>>[] alternatives) {
+        for (int slot = 0; slot < recipeInputAlternatives.length; slot++) {
+            List<IAEStack<?>> copied = new ArrayList<>();
+            if (alternatives != null && slot < alternatives.length && alternatives[slot] != null) {
+                for (IAEStack<?> alternative : alternatives[slot]) {
+                    if (alternative != null) copied.add(alternative.copy());
+                }
+            }
+            recipeInputAlternatives[slot] = copied;
+        }
     }
 
     private void layoutContainerSlots() {
@@ -891,6 +909,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
     @Override
     protected boolean mouseWheelEvent(int mouseX, int mouseY, int wheel) {
+        if (isShiftKeyDown() && cycleRecipeAlternative(wheel)) return true;
         if (!patternContainer.isCraftingMode() && patternContainer.processingGridSizeSync.get() == 4
             && processingScrollBar.contains(mouseX - guiLeft, mouseY - guiTop)) {
             int oldPage = processingScrollBar.getCurrentScroll();
@@ -905,6 +924,62 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             return true;
         }
         return super.mouseWheelEvent(mouseX, mouseY, wheel);
+    }
+
+    private boolean cycleRecipeAlternative(int wheel) {
+        VirtualMESlot hovered = getVirtualMESlotUnderMouse();
+        if (!(hovered instanceof VirtualMEPatternSlot) || wheel == 0 || !isCraftingInputSlot(hovered)) return false;
+        int slot = hovered.getSlotIndex();
+        if (slot < 0 || slot >= recipeInputAlternatives.length) return false;
+        IAEStack<?> current = hovered.getAEStack();
+        if (current == null || !current.isItem()) return false;
+        List<IAEStack<?>> alternatives = alternativesFor(slot, current);
+        if (alternatives == null) return false;
+
+        int currentIndex = -1;
+        for (int index = 0; index < alternatives.size(); index++) {
+            if (alternatives.get(index)
+                .isSameType(current)) {
+                currentIndex = index;
+                break;
+            }
+        }
+        if (currentIndex < 0) return false;
+        int direction = wheel < 0 ? 1 : -1;
+        int nextIndex = (currentIndex + direction + alternatives.size()) % alternatives.size();
+        IAEStack<?> replacement = alternatives.get(nextIndex)
+            .copy();
+        if (!replacement.isItem()) return false;
+        patternContainer.requestRecipeIngredientReplacement(current, replacement);
+        return true;
+    }
+
+    private List<IAEStack<?>> alternativesFor(int preferredSlot, IAEStack<?> current) {
+        List<IAEStack<?>> preferred = recipeInputAlternatives[preferredSlot];
+        if (containsAlternative(preferred, current)) return preferred;
+        // AE2Things searches every ingredient group for the hovered item. This
+        // fallback also keeps cycling valid after changing between shaped and
+        // compact processing layouts, where the visible slot index can move.
+        for (List<IAEStack<?>> alternatives : recipeInputAlternatives) {
+            if (containsAlternative(alternatives, current)) return alternatives;
+        }
+        return null;
+    }
+
+    private static boolean containsAlternative(List<IAEStack<?>> alternatives, IAEStack<?> current) {
+        if (alternatives == null || alternatives.size() < 2) return false;
+        for (IAEStack<?> alternative : alternatives) {
+            if (alternative.isSameType(current)) return true;
+        }
+        return false;
+    }
+
+    private boolean isCraftingInputSlot(VirtualMESlot slot) {
+        if (craftingSlots == null) return false;
+        for (VirtualMEPatternSlot input : craftingSlots) {
+            if (input == slot) return true;
+        }
+        return false;
     }
 
     @Override
@@ -922,6 +997,27 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     public ItemStack getHoveredStack() {
         ItemStack interfaceStack = interfaceTerminal.getHoveredStack();
         return interfaceStack == null ? super.getHoveredStack() : interfaceStack;
+    }
+
+    @Override
+    public List<String> handleItemTooltip(ItemStack stack, int mouseX, int mouseY, List<String> lines) {
+        lines = super.handleItemTooltip(stack, mouseX, mouseY, lines);
+        VirtualMESlot hovered = getVirtualMESlotUnderMouse();
+        if (hovered instanceof VirtualMEPatternSlot && isCraftingInputSlot(hovered)) {
+            IAEStack<?> current = hovered.getAEStack();
+            int slot = hovered.getSlotIndex();
+            if (current != null && slot >= 0
+                && slot < recipeInputAlternatives.length
+                && alternativesFor(slot, current) != null) {
+                lines.add(
+                    EnumChatFormatting.YELLOW + "SHIFT + "
+                        + StatCollector.translateToLocal("gtnh_qol_improvements.terminal.mouse_wheel")
+                        + EnumChatFormatting.GRAY
+                        + " - "
+                        + StatCollector.translateToLocal("gtnh_qol_improvements.terminal.cycle_alternatives"));
+            }
+        }
+        return lines;
     }
 
     @Override
