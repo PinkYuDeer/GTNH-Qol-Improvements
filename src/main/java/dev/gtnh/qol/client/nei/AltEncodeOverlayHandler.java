@@ -47,9 +47,10 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
 
         try {
             boolean crafting = isCraftingRecipe(recipe);
-            boolean virtualizeNonConsumed = !crafting && ProgrammableHatchesCompat.canVirtualizeNonConsumedInputs();
+            int toolkitMode = crafting ? 0 : ProgrammableHatchesCompat.activeToolkitMode();
+            boolean virtualizeNonConsumed = toolkitMode > 0;
             RecipeInputs collectedInputs = crafting ? collectCraftingInputs(recipe, recipeIndex)
-                : collectProcessingInputs(recipe, recipeIndex, virtualizeNonConsumed);
+                : collectProcessingInputs(recipe, recipeIndex, toolkitMode);
             IAEStack<?>[] outputs = crafting ? new IAEStack<?>[RecipeTransferPayload.SLOT_COUNT]
                 : collectProcessingOutputs(recipe, recipeIndex);
             int inputCount = countStacks(collectedInputs.stacks);
@@ -177,10 +178,11 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
         return result;
     }
 
-    private static RecipeInputs collectProcessingInputs(IRecipeHandler recipe, int recipeIndex,
-        boolean virtualizeNonConsumed) {
+    private static RecipeInputs collectProcessingInputs(IRecipeHandler recipe, int recipeIndex, int toolkitMode) {
         RecipeInputs result = new RecipeInputs();
-        int slot = 0;
+        boolean virtualizeNonConsumed = toolkitMode > 0;
+        List<RecipeInput> virtualInputs = new ArrayList<>();
+        List<RecipeInput> regularInputs = new ArrayList<>();
         for (PositionedStack positioned : safeList(recipe.getIngredientStacks(recipeIndex))) {
             IAEStack<?> stack;
             if (isNonConsumedInput(positioned)) {
@@ -192,19 +194,41 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
                 ItemStack nonConsumed = selectedItem(positioned);
                 stack = virtualizeNonConsumed ? toAEStack(ProgrammableHatchesCompat.wrapVirtualItem(nonConsumed))
                     : null;
+                if (stack != null) {
+                    virtualInputs.add(new RecipeInput(stack, collectAlternatives(positioned, true, true)));
+                }
             } else {
                 stack = toAEStack(positioned, true);
+                if (stack != null) {
+                    regularInputs.add(new RecipeInput(stack, collectAlternatives(positioned, true, false)));
+                }
             }
-            if (stack == null) continue;
-            if (slot >= result.stacks.length) break;
-            result.stacks[slot] = stack;
-            result.alternatives[slot] = collectAlternatives(
-                positioned,
-                true,
-                virtualizeNonConsumed && isNonConsumedInput(positioned));
+        }
+
+        // PH mode 2 is "Add empty progcircuit if no NC inputs". Its encoding
+        // hook prepends wrap(null), which resets a programmable input hatch
+        // instead of allowing the previous circuit to leak into this recipe.
+        if (toolkitMode == 2 && virtualInputs.isEmpty()) {
+            IAEStack<?> emptyVirtual = toAEStack(ProgrammableHatchesCompat.wrapEmptyVirtualItem());
+            if (emptyVirtual != null) virtualInputs.add(new RecipeInput(emptyVirtual, Collections.emptyList()));
+        }
+
+        // PH writes every converted NC input before normal ingredients. Keep
+        // the same stable ordering so consecutively dispatched patterns cannot
+        // consume regular inputs before their programming state is applied.
+        int slot = appendInputs(result, virtualInputs, 0);
+        appendInputs(result, regularInputs, slot);
+        return result;
+    }
+
+    private static int appendInputs(RecipeInputs target, List<RecipeInput> inputs, int slot) {
+        for (RecipeInput input : inputs) {
+            if (slot >= target.stacks.length) break;
+            target.stacks[slot] = input.stack;
+            target.alternatives[slot] = input.alternatives;
             slot++;
         }
-        return result;
+        return slot;
     }
 
     private static List<IAEStack<?>> collectAlternatives(PositionedStack positioned, boolean allowFluid,
@@ -302,6 +326,17 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
 
         private RecipeInputs() {
             java.util.Arrays.fill(alternatives, Collections.emptyList());
+        }
+    }
+
+    private static final class RecipeInput {
+
+        private final IAEStack<?> stack;
+        private final List<IAEStack<?>> alternatives;
+
+        private RecipeInput(IAEStack<?> stack, List<IAEStack<?>> alternatives) {
+            this.stack = stack;
+            this.alternatives = alternatives;
         }
     }
 }

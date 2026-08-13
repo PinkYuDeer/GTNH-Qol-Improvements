@@ -29,15 +29,16 @@ final class ProgrammableHatchesCompat {
      * directly as well so opening NEI immediately after equipping or moving the
      * toolkit cannot miss PH's ten-tick client-side holding cache.
      */
-    static boolean canVirtualizeNonConsumedInputs() {
-        if (!initialize()) return false;
+    static int activeToolkitMode() {
+        if (!initialize()) return 0;
         EntityPlayer player = Minecraft.getMinecraft().thePlayer;
-        if (player == null) return false;
-        if (hasActiveToolkit(player.inventory)) return true;
+        if (player == null) return 0;
+        int inventoryMode = findActiveToolkitMode(player.inventory);
+        if (inventoryMode > 0) return inventoryMode;
         try {
-            return hasActiveToolkit(BaublesApi.getBaubles(player));
+            return findActiveToolkitMode(BaublesApi.getBaubles(player));
         } catch (RuntimeException | LinkageError ignored) {
-            return false;
+            return 0;
         }
     }
 
@@ -53,8 +54,18 @@ final class ProgrammableHatchesCompat {
         }
     }
 
-    private static boolean hasActiveToolkit(IInventory inventory) {
-        if (inventory == null) return false;
+    static ItemStack wrapEmptyVirtualItem() {
+        if (!initialize()) return null;
+        try {
+            Object wrapped = wrapMethod.invoke(null, new Object[] { null });
+            return wrapped instanceof ItemStack stack ? stack : null;
+        } catch (IllegalAccessException | InvocationTargetException | RuntimeException | LinkageError ignored) {
+            return null;
+        }
+    }
+
+    private static int findActiveToolkitMode(IInventory inventory) {
+        if (inventory == null) return 0;
         for (int slot = 0; slot < inventory.getSizeInventory(); slot++) {
             ItemStack stack = inventory.getStackInSlot(slot);
             // PH's holding() treats metadata zero as disabled. Preserve that
@@ -62,10 +73,10 @@ final class ProgrammableHatchesCompat {
             if (stack != null && stack.getItem() != null
                 && stack.getItemDamage() > 0
                 && toolkitClass.isInstance(stack.getItem())) {
-                return true;
+                return stack.getItemDamage();
             }
         }
-        return false;
+        return 0;
     }
 
     private static synchronized boolean initialize() {
