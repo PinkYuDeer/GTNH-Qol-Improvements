@@ -46,8 +46,9 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
 
         try {
             boolean crafting = isCraftingRecipe(recipe);
+            boolean virtualizeNonConsumed = !crafting && ProgrammableHatchesCompat.canVirtualizeNonConsumedInputs();
             IAEStack<?>[] inputs = crafting ? collectCraftingInputs(recipe, recipeIndex)
-                : collectProcessingInputs(recipe, recipeIndex);
+                : collectProcessingInputs(recipe, recipeIndex, virtualizeNonConsumed);
             IAEStack<?>[] outputs = crafting ? new IAEStack<?>[RecipeTransferPayload.SLOT_COUNT]
                 : collectProcessingOutputs(recipe, recipeIndex);
             int inputCount = countStacks(inputs);
@@ -58,7 +59,7 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
 
             terminal.transferRecipe(
                 new RecipeTransferPayload(crafting, encode, processingGridSize, inverted, inputs, outputs),
-                interfaceSearchText(recipe, recipeIndex, crafting));
+                interfaceSearchText(recipe, recipeIndex, crafting, virtualizeNonConsumed));
         } catch (RuntimeException | LinkageError failure) {
             AELog.warn(failure, "Failed to transfer an NEI recipe to the quick encoding terminal");
         }
@@ -72,8 +73,9 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
     }
 
     /** Matches AE2Things: crafting patterns target molecular assemblers, while processing uses the NEI machine name. */
-    private static String interfaceSearchText(IRecipeHandler recipe, int recipeIndex, boolean crafting) {
-        if (!crafting) return gtProcessingSearchText(recipe, recipeIndex);
+    private static String interfaceSearchText(IRecipeHandler recipe, int recipeIndex, boolean crafting,
+        boolean virtualizeNonConsumed) {
+        if (!crafting) return gtProcessingSearchText(recipe, recipeIndex, virtualizeNonConsumed);
         ItemStack assembler = AEApi.instance()
             .definitions()
             .blocks()
@@ -88,9 +90,11 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
      * as a plain number, while other non-consumed inputs retain GTNH's current
      * interface suffix format.
      */
-    private static String gtProcessingSearchText(IRecipeHandler recipe, int recipeIndex) {
+    private static String gtProcessingSearchText(IRecipeHandler recipe, int recipeIndex,
+        boolean virtualizeNonConsumed) {
         String recipeName = recipe.getRecipeName();
-        if (!QolConfig.terminalGtRecipeSearchSuffix || !(recipe instanceof GTNEIDefaultHandler)) {
+        if (virtualizeNonConsumed || !QolConfig.terminalGtRecipeSearchSuffix
+            || !(recipe instanceof GTNEIDefaultHandler)) {
             return recipeName;
         }
 
@@ -164,11 +168,24 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
         return result;
     }
 
-    private static IAEStack<?>[] collectProcessingInputs(IRecipeHandler recipe, int recipeIndex) {
+    private static IAEStack<?>[] collectProcessingInputs(IRecipeHandler recipe, int recipeIndex,
+        boolean virtualizeNonConsumed) {
         IAEStack<?>[] result = new IAEStack<?>[RecipeTransferPayload.SLOT_COUNT];
         int slot = 0;
         for (PositionedStack positioned : safeList(recipe.getIngredientStacks(recipeIndex))) {
-            IAEStack<?> stack = toAEStack(positioned, true);
+            IAEStack<?> stack;
+            if (isNonConsumedInput(positioned)) {
+                // GT exposes molds, lenses, integrated circuits, and similar
+                // catalysts as zero-sized NEI inputs. They describe the target
+                // machine but must not become consumable pattern ingredients.
+                // An active Programmable Hatches toolkit replaces them with
+                // the mod's virtual-item wrapper, matching AE2Things.
+                ItemStack nonConsumed = selectedItem(positioned);
+                stack = virtualizeNonConsumed ? toAEStack(ProgrammableHatchesCompat.wrapVirtualItem(nonConsumed))
+                    : null;
+            } else {
+                stack = toAEStack(positioned, true);
+            }
             if (stack == null) continue;
             if (slot >= result.length) break;
             result[slot++] = stack;
@@ -219,6 +236,13 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
             result.setStackSize(fixed.realStackSize);
         }
         return result;
+    }
+
+    private static IAEStack<?> toAEStack(ItemStack item) {
+        if (item == null) return null;
+        ItemStack copy = item.copy();
+        copy.stackSize = Math.max(1, copy.stackSize);
+        return AEItemStack.create(copy);
     }
 
     private static int countStacks(IAEStack<?>[] stacks) {
