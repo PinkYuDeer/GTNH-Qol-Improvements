@@ -4,11 +4,12 @@ import net.minecraft.item.ItemStack;
 
 import cpw.mods.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 import cpw.mods.fml.relauncher.Side;
-import dev.gtnh.qol.GTNHQolImprovements;
 
 public final class QolNetwork {
 
-    public static final SimpleNetworkWrapper CHANNEL = new SimpleNetworkWrapper(GTNHQolImprovements.MOD_ID);
+    /** Minecraft 1.7.10 limits C17 custom-payload channel names to 20 characters. */
+    private static final String CHANNEL_NAME = "gtnh_qol";
+    public static final SimpleNetworkWrapper CHANNEL = new SimpleNetworkWrapper(CHANNEL_NAME);
 
     private QolNetwork() {}
 

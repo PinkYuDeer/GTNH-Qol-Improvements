@@ -72,7 +72,8 @@ public final class DualTerminalKeyHandler {
         EntityPlayer player = minecraft.thePlayer;
         if (minecraft.currentScreen != null || player == null
             || player.capabilities.isCreativeMode
-            || player.inventory.getCurrentItem() != null) {
+            || player.inventory.getCurrentItem() != null
+            || !hasDualTerminal(player)) {
             return;
         }
 
@@ -111,5 +112,17 @@ public final class DualTerminalKeyHandler {
 
     private static boolean isDualTerminal(ItemStack stack) {
         return stack != null && stack.getItem() == QolItems.dualTerminal;
+    }
+
+    private static boolean hasDualTerminal(EntityPlayer player) {
+        for (ItemStack stack : player.inventory.mainInventory) {
+            if (isDualTerminal(stack)) return true;
+        }
+        IInventory baubles = BaublesApi.getBaubles(player);
+        if (baubles == null) return false;
+        for (int slot = 0; slot < baubles.getSizeInventory(); slot++) {
+            if (isDualTerminal(baubles.getStackInSlot(slot))) return true;
+        }
+        return false;
     }
 }
