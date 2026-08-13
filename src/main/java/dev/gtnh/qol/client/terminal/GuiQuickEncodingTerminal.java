@@ -381,14 +381,16 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
     private void updateItemScrollBar() {
         int size = itemRepo == null ? 0 : itemRepo.size();
-        int scrollRows = Math.max(1, itemRows - pinDisplayRows);
         getScrollBar().setLeft(ITEM_PANEL_X + ITEM_PANEL_WIDTH - 20)
-            .setTop(itemPanelY + 18 + pinDisplayRows * 18)
-            .setHeight(scrollRows * 18 - 2)
+            // Pin slots stay fixed, but AE2's scrollbar track covers the full
+            // storage grid. Starting it below the pins made scroll zero look
+            // like a partially scrolled position.
+            .setTop(itemPanelY + 18)
+            .setHeight(itemRows * 18 - 2)
             .setRange(
                 0,
                 Math.max(0, (size - visibleItemSlots + ITEM_COLUMNS - 1) / ITEM_COLUMNS),
-                Math.max(1, scrollRows / 6));
+                Math.max(1, itemRows / 6));
     }
 
     private void layoutButtons() {

@@ -8,7 +8,10 @@ import net.minecraft.util.StatCollector;
 
 import appeng.client.gui.implementations.GuiMEMonitorable;
 import codechicken.nei.BookmarkPanel;
+import codechicken.nei.ItemPanel;
+import codechicken.nei.ItemsGrid.ItemsGridSlot;
 import codechicken.nei.LayoutManager;
+import codechicken.nei.NEIClientConfig;
 import codechicken.nei.bookmark.BookmarksGridSlot;
 import codechicken.nei.guihook.GuiContainerManager;
 import codechicken.nei.guihook.IContainerInputHandler;
@@ -17,7 +20,7 @@ import codechicken.nei.util.NEIMouseUtils;
 import dev.gtnh.qol.config.QolConfig;
 import dev.gtnh.qol.network.QolNetwork;
 
-/** Makes NEI bookmarks behave like craftable entries in the quick terminal. */
+/** Makes NEI bookmarks, item-panel entries, and history entries orderable through an open AE terminal. */
 final class BookmarkCraftHandler implements IContainerInputHandler, IContainerTooltipHandler {
 
     static void registerFirst(BookmarkCraftHandler handler) {
@@ -37,28 +40,17 @@ final class BookmarkCraftHandler implements IContainerInputHandler, IContainerTo
             || !(gui instanceof GuiMEMonitorable)) {
             return false;
         }
-        BookmarksGridSlot slot = bookmarkSlotAt(mouseX, mouseY);
-        if (slot == null) {
+        OrderTarget target = orderTargetAt(mouseX, mouseY);
+        if (target == null) {
             return false;
         }
-        ItemStack bookmark = slot.getItemStack();
-        if (bookmark == null) {
-            return false;
-        }
-        long amount = Math.max(
-            1,
-            slot.getBookmarkItem()
-                .getAmount());
-        bookmark = bookmark.copy();
-        bookmark.stackSize = 1;
-        QolNetwork.middleClickBookmark(bookmark, amount);
+        QolNetwork.middleClickBookmark(target.stack, target.amount);
         return true;
     }
 
     @Override
     public Map<String, String> handleHotkeys(GuiContainer gui, int mouseX, int mouseY, Map<String, String> hotkeys) {
-        if (QolConfig.middleClickOrdering && gui instanceof GuiMEMonitorable
-            && bookmarkSlotAt(mouseX, mouseY) != null) {
+        if (QolConfig.middleClickOrdering && gui instanceof GuiMEMonitorable && orderTargetAt(mouseX, mouseY) != null) {
             hotkeys.put(
                 NEIMouseUtils.getKeyName(NEIMouseUtils.MOUSE_BTN_MMB),
                 StatCollector.translateToLocal("gtnh_qol_improvements.nei.middle_click_order"));
@@ -72,6 +64,44 @@ final class BookmarkCraftHandler implements IContainerInputHandler, IContainerTo
             return null;
         }
         return panel.getSlotMouseOver(mouseX, mouseY);
+    }
+
+    private static OrderTarget orderTargetAt(int mouseX, int mouseY) {
+        BookmarksGridSlot bookmark = bookmarkSlotAt(mouseX, mouseY);
+        if (bookmark != null) {
+            return target(
+                bookmark.getItemStack(),
+                Math.max(
+                    1,
+                    bookmark.getBookmarkItem()
+                        .getAmount()));
+        }
+
+        ItemPanel panel = LayoutManager.itemPanel;
+        if (panel == null) return null;
+        ItemsGridSlot slot = panel.getSlotMouseOver(mouseX, mouseY);
+        if (slot == null && NEIClientConfig.showHistoryPanelWidget() && panel.historyPanel != null) {
+            slot = panel.historyPanel.getSlotMouseOver(mouseX, mouseY);
+        }
+        return slot == null ? null : target(slot.getItemStack(), 1);
+    }
+
+    private static OrderTarget target(ItemStack source, long amount) {
+        if (source == null || source.getItem() == null) return null;
+        ItemStack stack = source.copy();
+        stack.stackSize = 1;
+        return new OrderTarget(stack, Math.max(1, amount));
+    }
+
+    private static final class OrderTarget {
+
+        private final ItemStack stack;
+        private final long amount;
+
+        private OrderTarget(ItemStack stack, long amount) {
+            this.stack = stack;
+            this.amount = amount;
+        }
     }
 
     @Override
