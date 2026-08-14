@@ -15,6 +15,7 @@ public final class QolConfig {
     public static boolean dualTerminal = true;
     public static boolean terminalGtRecipeSearchSuffix = true;
     public static boolean middleClickOrdering = true;
+    public static boolean craftingTreeMissingBranches = true;
 
     private static Configuration configuration;
 
@@ -73,6 +74,15 @@ public final class QolConfig {
                 + "在快速编码终端中键点击NEI书签下单；在世界中键方块时从玩家背包选取、从ME库存取出，或打开自动合成下单界面。");
         middleClick.setLanguageKey("gtnh_qol_improvements.config.middleClickOrdering");
         middleClickOrdering = middleClick.getBoolean(true);
+
+        Property missingBranches = configuration.get(
+            CATEGORY_FEATURES,
+            "craftingTreeMissingBranches",
+            true,
+            "Add a client-side button to AE2's crafting-plan tree that shows only branches leading to missing ingredients.\n"
+                + "在AE2合成计划的合成树中添加仅显示缺失原料分支的客户端按钮。");
+        missingBranches.setLanguageKey("gtnh_qol_improvements.config.craftingTreeMissingBranches");
+        craftingTreeMissingBranches = missingBranches.getBoolean(true);
 
         ConfigCategory category = configuration.getCategory(CATEGORY_FEATURES);
         category.setLanguageKey("gtnh_qol_improvements.config.features");

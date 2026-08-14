@@ -50,6 +50,7 @@ import appeng.client.gui.slots.VirtualMEPinSlot;
 import appeng.client.gui.slots.VirtualMESlot;
 import appeng.client.gui.widgets.GuiImgButton;
 import appeng.client.gui.widgets.GuiScrollbar;
+import appeng.client.gui.widgets.GuiSimpleImgButton;
 import appeng.client.gui.widgets.GuiTabButton;
 import appeng.client.gui.widgets.MEGuiTextField;
 import appeng.client.me.ItemRepo;
@@ -153,10 +154,13 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     private ModeButton processing4ModeButton;
     private ModeButton processing3ModeButton;
     private RightEncodingButton encodeButton;
+    private GuiSimpleImgButton searchMappingButton;
     private GuiButton craftingStatusButton;
     private boolean initializedOnce;
     private boolean pendingPinRefresh;
     private String pendingInterfaceSearch;
+    private String activeInterfaceSearchMappingKey;
+    private String activeInterfaceSearchDefault;
     private int pendingTargetSelectionTicks;
     private boolean pendingAutoPlace;
     private long suppressExtensionClickUntil;
@@ -214,14 +218,21 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             : null;
         processing3ModeButton = createModeButton(Blocks.furnace, "gtnh_qol_improvements.terminal.mode.processing_3x3");
         encodeButton = new RightEncodingButton();
+        searchMappingButton = new GuiSimpleImgButton(
+            0,
+            0,
+            70,
+            StatCollector.translateToLocal("gtnh_qol_improvements.terminal.edit_search_mapping"));
         patternButtons.add(craftingModeButton);
         if (processing4ModeButton != null) patternButtons.add(processing4ModeButton);
         patternButtons.add(processing3ModeButton);
         patternButtons.add(encodeButton);
+        patternButtons.add(searchMappingButton);
         buttonList.add(craftingModeButton);
         if (processing4ModeButton != null) buttonList.add(processing4ModeButton);
         buttonList.add(processing3ModeButton);
         buttonList.add(encodeButton);
+        buttonList.add(searchMappingButton);
 
         invertButton = new GuiImgButton(
             guiLeft + PATTERN_PANEL_X + 87,
@@ -465,6 +476,13 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         int right = guiLeft + PATTERN_PANEL_X;
         int panelTop = guiTop + patternPanelY();
         for (GuiButton button : patternButtons) {
+            if (button == searchMappingButton) {
+                button.xPosition = right + 2;
+                button.yPosition = panelTop + PATTERN_PATTERN_ROW_Y;
+                button.visible = activeInterfaceSearchMappingKey != null;
+                button.enabled = button.visible;
+                continue;
+            }
             if (button instanceof GuiTabButton) {
                 button.xPosition = right + (patternContainer.supportsExtendedProcessing()
                     ? button == craftingModeButton ? 13 : button == processing3ModeButton ? 38 : 63
@@ -588,8 +606,8 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         } catch (IllegalAccessException ignored) {}
     }
 
-    public void transferRecipe(RecipeTransferPayload payload, String interfaceSearch,
-        List<IAEStack<?>>[] inputAlternatives) {
+    public void transferRecipe(RecipeTransferPayload payload, String interfaceSearchMappingKey,
+        String defaultInterfaceSearch, List<IAEStack<?>>[] inputAlternatives) {
         if (!patternContainer.supportsExtendedProcessing() && !payload.isCrafting()
             && payload.getProcessingGridSize() != 3) {
             mc.thePlayer.addChatMessage(
@@ -601,13 +619,28 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         // work until drawScreen runs on the restored terminal; otherwise AE2's
         // init replaces both the search value and the selected entry.
         interfaceTerminal.clearHighlight();
-        pendingInterfaceSearch = interfaceSearch == null ? "" : interfaceSearch;
+        activeInterfaceSearchMappingKey = interfaceSearchMappingKey == null || interfaceSearchMappingKey.isEmpty()
+            || defaultInterfaceSearch == null
+            || defaultInterfaceSearch.isEmpty() ? null : interfaceSearchMappingKey;
+        activeInterfaceSearchDefault = activeInterfaceSearchMappingKey == null ? null : defaultInterfaceSearch;
+        pendingInterfaceSearch = activeInterfaceSearchMappingKey == null ? ""
+            : InterfaceSearchMappings.resolve(activeInterfaceSearchMappingKey, activeInterfaceSearchDefault);
         pendingTargetSelectionTicks = 0;
         pendingAutoPlace = payload.shouldEncode();
         rememberRecipeAlternatives(inputAlternatives);
         patternContainer.requestRecipeTransfer(payload);
         layoutButtons();
         layoutPatternSlots();
+    }
+
+    void refreshInterfaceSearchMapping(String mappingKey, String defaultValue) {
+        if (mappingKey == null || !mappingKey.equals(activeInterfaceSearchMappingKey)) return;
+        activeInterfaceSearchDefault = defaultValue;
+        pendingInterfaceSearch = InterfaceSearchMappings.resolve(mappingKey, defaultValue);
+        pendingTargetSelectionTicks = 0;
+        pendingAutoPlace = false;
+        interfaceTerminal.clearHighlight();
+        layoutButtons();
     }
 
     private void rememberRecipeAlternatives(List<IAEStack<?>>[] alternatives) {
@@ -687,7 +720,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
     private void applyPendingRecipeSearch() {
         if (pendingInterfaceSearch != null) {
-            interfaceTerminal.setNameSearchText(pendingInterfaceSearch);
+            interfaceTerminal.setAutomaticSearchText(pendingInterfaceSearch);
             pendingInterfaceSearch = null;
             pendingTargetSelectionTicks = 60;
             interfaceTerminal.clearSearchFocus();
@@ -814,6 +847,11 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             } else {
                 patternContainer.encodeAction.send();
             }
+            return;
+        }
+        if (button == searchMappingButton && activeInterfaceSearchMappingKey != null) {
+            mc.displayGuiScreen(
+                new GuiInterfaceSearchMapping(this, activeInterfaceSearchMappingKey, activeInterfaceSearchDefault));
             return;
         }
         if (interfaceButtons.contains(button)) {
@@ -1546,7 +1584,14 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             if (field != null) field.setFocused(true);
         }
 
-        private void setNameSearchText(String text) {
+        private void setAutomaticSearchText(String text) {
+            for (Field search : new Field[] { INPUT_SEARCH, OUTPUT_SEARCH }) {
+                MEGuiTextField field = textField(search);
+                if (field != null && !field.getText()
+                    .isEmpty()) {
+                    field.setText("");
+                }
+            }
             MEGuiTextField field = textField(NAME_SEARCH);
             String newText = text == null ? "" : text;
             if (field != null) {

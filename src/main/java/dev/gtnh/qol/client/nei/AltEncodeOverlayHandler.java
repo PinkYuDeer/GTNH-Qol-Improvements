@@ -61,6 +61,7 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
             int processingGridSize = !crafting && (inputCount > 9 || outputCount > 3) ? 4 : 3;
             boolean inverted = !crafting && processingGridSize == 4 && inputCount <= 4 && outputCount > 4;
             boolean encode = QolConfig.dualTerminal && isAltDown();
+            String defaultInterfaceSearch = interfaceSearchText(recipe, recipeIndex, crafting, virtualizeNonConsumed);
 
             terminal.transferRecipe(
                 new RecipeTransferPayload(
@@ -70,11 +71,19 @@ public final class AltEncodeOverlayHandler implements IOverlayHandler {
                     inverted,
                     collectedInputs.stacks,
                     outputs),
-                interfaceSearchText(recipe, recipeIndex, crafting, virtualizeNonConsumed),
+                interfaceSearchMappingKey(recipe, crafting),
+                defaultInterfaceSearch,
                 collectedInputs.alternatives);
         } catch (RuntimeException | LinkageError failure) {
             AELog.warn(failure, "Failed to transfer an NEI recipe to the quick encoding terminal");
         }
+    }
+
+    private static String interfaceSearchMappingKey(IRecipeHandler recipe, boolean crafting) {
+        String identifier = recipe.getOverlayIdentifier();
+        if (identifier == null || identifier.isEmpty()) identifier = recipe.getClass()
+            .getName();
+        return (crafting ? "crafting:" : "processing:") + identifier;
     }
 
     private static boolean isCraftingRecipe(IRecipeHandler recipe) {

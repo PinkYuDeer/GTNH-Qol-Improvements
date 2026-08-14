@@ -3,6 +3,7 @@ package dev.gtnh.qol.proxy;
 import net.minecraftforge.common.MinecraftForge;
 
 import cpw.mods.fml.common.FMLCommonHandler;
+import dev.gtnh.qol.client.crafting.CraftingTreeMissingBranchesHandler;
 import dev.gtnh.qol.client.nei.NeiIntegration;
 import dev.gtnh.qol.client.terminal.DualTerminalKeyHandler;
 import dev.gtnh.qol.client.vajra.VajraOverlayHandler;
@@ -11,11 +12,13 @@ public final class ClientProxy extends CommonProxy {
 
     private final DualTerminalKeyHandler keyHandler = new DualTerminalKeyHandler();
     private final VajraOverlayHandler vajraHandler = new VajraOverlayHandler();
+    private final CraftingTreeMissingBranchesHandler craftingTreeHandler = new CraftingTreeMissingBranchesHandler();
 
     @Override
     public void preInit() {
         super.preInit();
         MinecraftForge.EVENT_BUS.register(vajraHandler);
+        MinecraftForge.EVENT_BUS.register(craftingTreeHandler);
         FMLCommonHandler.instance()
             .bus()
             .register(vajraHandler);
