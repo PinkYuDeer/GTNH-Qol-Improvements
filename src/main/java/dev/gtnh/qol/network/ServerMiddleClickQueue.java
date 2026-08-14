@@ -187,8 +187,24 @@ public final class ServerMiddleClickQueue {
         try {
             IGrid grid = node.getGrid();
             ICraftingGrid crafting = grid.getCache(ICraftingGrid.class);
-            return crafting != null && !crafting.getCraftingFor(target, null, 0, player.worldObj)
-                .isEmpty();
+            if (crafting == null) return false;
+            if (!crafting.getCraftingFor(target, null, 0, player.worldObj)
+                .isEmpty()) {
+                return true;
+            }
+            // AE2's getCraftingFor implementation only searches item outputs.
+            // Fluid patterns are present in this generic output map, so use it
+            // as the authoritative fallback for fluid orders.
+            for (var entry : crafting.getCraftingMultiPatterns()
+                .entrySet()) {
+                IAEStack<?> output = entry.getKey();
+                if (output != null && output.isSameType(target)
+                    && !entry.getValue()
+                        .isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
         } catch (RuntimeException | LinkageError ignored) {
             return false;
         }

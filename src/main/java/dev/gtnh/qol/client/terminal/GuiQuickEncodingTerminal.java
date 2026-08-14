@@ -72,6 +72,7 @@ import dev.gtnh.qol.network.QolNetwork;
 import dev.gtnh.qol.terminal.ContainerQuickEncodingTerminal;
 import dev.gtnh.qol.terminal.InterfacePatternTarget;
 import dev.gtnh.qol.terminal.RecipeTransferPayload;
+import dev.gtnh.qol.terminal.StorageFluidRequest;
 
 /**
  * AE2Things-style single page: ME inventory on the left, the native interface
@@ -945,11 +946,29 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
     @Override
     protected boolean handleVirtualSlotClick(VirtualMESlot slot, int mouseButton) {
+        IAEStack<?> monitorTarget = slot instanceof VirtualMEMonitorableSlot ? slot.getAEStack() : null;
+        if (monitorTarget instanceof IAEItemStack item) monitorTarget = Platform.convertStack(item);
+        if (mouseButton == 0 && !isCtrlKeyDown()
+            && !isShiftKeyDown()
+            && monitorTarget != null
+            && monitorTarget.isFluid()
+            && mc.thePlayer.inventory.getItemStack() == null) {
+            patternContainer.requestFillOneFluidUnit(new StorageFluidRequest(monitorTarget));
+            suppressExtensionVanillaClick(mouseButton);
+            return true;
+        }
+        if (mouseButton == 1 && !isCtrlKeyDown()
+            && !isShiftKeyDown()
+            && monitorTarget != null
+            && monitorTarget.isFluid()
+            && mc.thePlayer.inventory.getItemStack() == null) {
+            patternContainer.requestStoreOneFluidUnit(new StorageFluidRequest(monitorTarget));
+            suppressExtensionVanillaClick(mouseButton);
+            return true;
+        }
         if (QolConfig.middleClickOrdering && mouseButton == 1000101 && slot instanceof VirtualMEMonitorableSlot) {
-            IAEStack<?> target = slot.getAEStack();
-            if (target instanceof IAEItemStack item) target = Platform.convertStack(item);
-            if (target != null && target.isFluid()) {
-                QolNetwork.middleClickBookmark(target, 1);
+            if (monitorTarget != null && monitorTarget.isFluid()) {
+                QolNetwork.middleClickBookmark(monitorTarget, 1);
                 suppressExtensionVanillaClick(mouseButton);
                 return true;
             }
@@ -1033,6 +1052,10 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         VirtualMESlot slot = getVirtualMESlotUnderMouse();
         if (!(slot instanceof VirtualMEMonitorableSlot)) return false;
 
+        if (isCtrlKeyDown()) return handleStorageBackpackWheel(slot, wheel);
+
+        // Native AE2 behavior: Shift + wheel moves one item per step between
+        // the hovered ME entry and the stack held by the mouse cursor.
         MonitorableAction direction = wheel > 0 ? MonitorableAction.ROLL_DOWN : MonitorableAction.ROLL_UP;
         if (direction == MonitorableAction.ROLL_DOWN && mc.thePlayer.inventory.getItemStack() == null) return false;
         if (direction == MonitorableAction.ROLL_UP && !(slot.getAEStack() instanceof IAEItemStack)) return false;
@@ -1042,6 +1065,34 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             NetworkHandler.instance.sendToServer(new PacketMonitorableAction(direction, -1));
         }
         return true;
+    }
+
+    /**
+     * Ctrl is our backpack-oriented companion to AE2's cursor-oriented Shift
+     * action. Scrolling out withdraws one full stack straight into the player
+     * inventory; scrolling in inserts one matching inventory item into ME.
+     */
+    private boolean handleStorageBackpackWheel(VirtualMESlot slot, int wheel) {
+        if (!(slot.getAEStack() instanceof IAEItemStack target)) return false;
+
+        if (wheel < 0) {
+            ((AEBaseContainer) inventorySlots).setTargetStack(target);
+            for (int step = 0; step < Math.abs(wheel); step++) {
+                NetworkHandler.instance.sendToServer(new PacketMonitorableAction(MonitorableAction.SHIFT_CLICK, -1));
+            }
+            return true;
+        }
+
+        ItemStack wanted = target.getItemStack();
+        if (wanted == null) return false;
+        for (Object candidate : inventorySlots.inventorySlots) {
+            if (!(candidate instanceof AppEngSlot playerSlot) || !playerSlot.isPlayerSide()) continue;
+            ItemStack stored = playerSlot.getStack();
+            if (stored == null || !Platform.isSameItemPrecise(wanted, stored)) continue;
+            patternContainer.requestStoreOneFromInventory(playerSlot.slotNumber);
+            return true;
+        }
+        return false;
     }
 
     private boolean cycleRecipeAlternative(int wheel) {

@@ -12,6 +12,7 @@ import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.common.util.ForgeDirection;
 
+import appeng.api.config.Actionable;
 import appeng.api.config.PinsRows;
 import appeng.api.implementations.ICraftingPatternItem;
 import appeng.api.networking.IGridNode;
@@ -20,14 +21,18 @@ import appeng.api.networking.crafting.ICraftingProvider;
 import appeng.api.networking.events.MENetworkCraftingPatternChange;
 import appeng.api.parts.IInterfaceTerminal;
 import appeng.api.parts.IPatternTerminalEx;
+import appeng.api.storage.IMEMonitor;
 import appeng.api.storage.ITerminalHost;
+import appeng.api.storage.data.IAEFluidStack;
 import appeng.api.storage.data.IAEItemStack;
 import appeng.api.storage.data.IAEStack;
+import appeng.api.storage.data.IAEStackType;
 import appeng.api.util.IInterfaceViewable;
 import appeng.container.ContainerOpenContext;
 import appeng.container.PrimaryGui;
 import appeng.container.implementations.ContainerInterfaceTerminal;
 import appeng.container.implementations.ContainerPatternTerm;
+import appeng.container.slot.AppEngSlot;
 import appeng.container.slot.SlotRestrictedInput;
 import appeng.container.sync.ActionHandler;
 import appeng.container.sync.StreamCodecs;
@@ -39,8 +44,10 @@ import appeng.helpers.IInterfaceHost;
 import appeng.helpers.InventoryAction;
 import appeng.tile.inventory.AppEngInternalInventory;
 import appeng.tile.inventory.IAEStackInventory;
+import appeng.util.InventoryAdaptor;
 import appeng.util.Platform;
 import appeng.util.item.AEItemStack;
+import it.unimi.dsi.fastutil.objects.ObjectLongPair;
 
 /**
  * One server container that keeps AE2's storage/pattern terminal active while delegating
@@ -76,6 +83,9 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     public final ActionHandler<Integer> takeEncodedPatternAction;
     public final ActionHandler<InterfacePatternTarget> clickInterfacePatternAction;
     public final ActionHandler<InterfacePatternTarget> shiftClickInterfacePatternAction;
+    public final ActionHandler<Integer> storeOneFromInventoryAction;
+    public final ActionHandler<StorageFluidRequest> fillOneFluidUnitAction;
+    public final ActionHandler<StorageFluidRequest> storeOneFluidUnitAction;
 
     private final IAEStack<?>[] craftingInputSnapshot = new IAEStack<?>[RecipeTransferPayload.SLOT_COUNT];
     private final IAEStack<?>[] craftingOutputSnapshot = new IAEStack<?>[RecipeTransferPayload.SLOT_COUNT];
@@ -85,6 +95,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
     private boolean processingSnapshotValid;
     private boolean appliedCraftingMode;
     private boolean appliedCraftingModeInitialized;
+    private boolean encodingWithLogicalInventorySize;
     /**
      * The two snapshots are representations of one recipe, never independent
      * recipes. The flag is valid only while the active representation still
@@ -150,6 +161,12 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
             .onServerAction(target -> performInterfacePatternAction(target, InventoryAction.PICKUP_OR_SET_DOWN));
         shiftClickInterfacePatternAction = sync.actionC2S("shiftClickInterfacePattern", InterfacePatternTarget.CODEC)
             .onServerAction(target -> performInterfacePatternAction(target, InventoryAction.SHIFT_CLICK));
+        storeOneFromInventoryAction = sync.actionC2S("storeOneFromInventory", StreamCodecs.intValue())
+            .onServerAction(this::storeOneFromInventory);
+        fillOneFluidUnitAction = sync.actionC2S("fillOneFluidUnit", StorageFluidRequest.CODEC)
+            .onServerAction(this::fillOneFluidUnit);
+        storeOneFluidUnitAction = sync.actionC2S("storeOneFluidUnit", StorageFluidRequest.CODEC)
+            .onServerAction(this::storeOneFluidUnit);
         if (Platform.isServer()) {
             invertedSync.set(getExtendedPatternTerminal().isInverted());
             activePageSync.set(getExtendedPatternTerminal().getActivePage());
@@ -164,6 +181,12 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
 
     @Override
     public void detectAndSendChanges() {
+        // encodeWithInventorySizes temporarily exposes only the logical 3x3
+        // inventory to AE2's encoder. ContainerPatternTerm.encode() calls this
+        // method before that temporary size is restored; syncing at that point
+        // would replace AEStackInventorySyncHandler's 32-slot snapshot with a
+        // 9/3-slot snapshot and make its next diff walk past the array bounds.
+        if (encodingWithLogicalInventorySize) return;
         if (Platform.isServer()) {
             IPatternTerminalEx terminal = getExtendedPatternTerminal();
             invertedSync.set(terminal.isInverted());
@@ -233,6 +256,242 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
 
     public boolean supportsExtendedProcessing() {
         return quickTerminal.supportsExtendedProcessing();
+    }
+
+    public void requestStoreOneFromInventory(int slotNumber) {
+        storeOneFromInventoryAction.send(slotNumber);
+    }
+
+    public void requestFillOneFluidUnit(StorageFluidRequest request) {
+        fillOneFluidUnitAction.send(request);
+    }
+
+    public void requestStoreOneFluidUnit(StorageFluidRequest request) {
+        storeOneFluidUnitAction.send(request);
+    }
+
+    private void storeOneFromInventory(int slotNumber) {
+        if (slotNumber < 0 || slotNumber >= inventorySlots.size()) return;
+        if (!(getSlot(slotNumber) instanceof AppEngSlot playerSlot) || !playerSlot.isPlayerSide()) return;
+        ItemStack stored = playerSlot.getStack();
+        if (stored == null || stored.stackSize <= 0) return;
+
+        ItemStack single = stored.copy();
+        single.stackSize = 1;
+        ItemStack leftover = shiftStoreItem(single);
+        if (leftover != null && leftover.stackSize > 0) return;
+
+        playerSlot.decrStackSize(1);
+        playerSlot.onSlotChanged();
+        detectAndSendChanges();
+    }
+
+    private void fillOneFluidUnit(StorageFluidRequest request) {
+        IAEStack<?> requested = request == null ? null : request.getFluid();
+        if (!(requested instanceof IAEFluidStack fluid)) return;
+        var itemMonitor = getItemMonitor();
+        var fluidMonitor = quickTerminal.getFluidInventory();
+        if (itemMonitor == null || fluidMonitor == null || getPowerSource() == null) return;
+
+        EmptyFluidContainer empty = findEmptyFluidContainer(itemMonitor, fluidMonitor, fluid);
+        if (empty == null) return;
+
+        IAEFluidStack fluidRequest = fluid.copy();
+        fluidRequest.setStackSize(empty.capacity);
+        IAEFluidStack availableFluid = fluidMonitor.extractItems(fluidRequest, Actionable.SIMULATE, getActionSource());
+        if (availableFluid == null || availableFluid.getStackSize() < empty.capacity) return;
+
+        IAEItemStack emptyRequest = empty.stack.copy();
+        emptyRequest.setStackSize(1);
+        IAEItemStack availableEmpty = itemMonitor.extractItems(emptyRequest, Actionable.SIMULATE, getActionSource());
+        if (availableEmpty == null || availableEmpty.getStackSize() < 1) return;
+
+        ObjectLongPair<ItemStack> preview = fluid.getStackType()
+            .fillContainer(empty.item.copy(), fluidRequest);
+        if (!isCompletelyFilled(preview, empty.capacity) || !canAcceptFilledContainer(preview.left())) return;
+
+        IAEItemStack extractedEmpty = Platform
+            .poweredExtraction(getPowerSource(), itemMonitor, emptyRequest, getActionSource());
+        if (extractedEmpty == null || extractedEmpty.getStackSize() < 1) return;
+
+        IAEFluidStack extractedFluid = Platform
+            .poweredExtraction(getPowerSource(), fluidMonitor, fluidRequest, getActionSource());
+        if (extractedFluid == null || extractedFluid.getStackSize() < empty.capacity) {
+            restoreItem(itemMonitor, extractedEmpty);
+            restoreFluid(fluidMonitor, extractedFluid);
+            return;
+        }
+
+        ItemStack extractedItem = extractedEmpty.getItemStack();
+        extractedItem.stackSize = 1;
+        ObjectLongPair<ItemStack> filled = fluid.getStackType()
+            .fillContainer(extractedItem, extractedFluid);
+        if (!isCompletelyFilled(filled, empty.capacity)) {
+            restoreItem(itemMonitor, extractedEmpty);
+            restoreFluid(fluidMonitor, extractedFluid);
+            return;
+        }
+
+        giveFilledContainer(filled.left());
+        detectAndSendChanges();
+    }
+
+    private void storeOneFluidUnit(StorageFluidRequest request) {
+        IAEStack<?> requested = request == null ? null : request.getFluid();
+        if (!(requested instanceof IAEFluidStack fluid)) return;
+        IMEMonitor<IAEItemStack> itemMonitor = getItemMonitor();
+        IMEMonitor<IAEFluidStack> fluidMonitor = quickTerminal.getFluidInventory();
+        if (itemMonitor == null || fluidMonitor == null || getPowerSource() == null) return;
+
+        FilledFluidContainer filled = findFilledFluidContainer(fluid);
+        if (filled == null) return;
+
+        IAEItemStack emptyRequest = AEItemStack.create(filled.empty.copy());
+        IAEFluidStack fluidRequest = filled.fluid.copy();
+        if (!canInsertAll(itemMonitor.injectItems(emptyRequest.copy(), Actionable.SIMULATE, getActionSource()))
+            || !canInsertAll(
+                Platform.poweredInsert(
+                    getPowerSource(),
+                    fluidMonitor,
+                    fluidRequest.copy(),
+                    getActionSource(),
+                    Actionable.SIMULATE))) {
+            return;
+        }
+
+        IAEItemStack emptyLeftover = itemMonitor
+            .injectItems(emptyRequest.copy(), Actionable.MODULATE, getActionSource());
+        if (!canInsertAll(emptyLeftover)) {
+            rollbackInserted(itemMonitor, emptyRequest, emptyLeftover);
+            return;
+        }
+
+        IAEFluidStack fluidLeftover = Platform
+            .poweredInsert(getPowerSource(), fluidMonitor, fluidRequest.copy(), getActionSource(), Actionable.MODULATE);
+        if (!canInsertAll(fluidLeftover)) {
+            rollbackInserted(itemMonitor, emptyRequest, null);
+            rollbackInserted(fluidMonitor, fluidRequest, fluidLeftover);
+            return;
+        }
+
+        ItemStack source = getPlayerInv().mainInventory[filled.inventorySlot];
+        if (source == null || !Platform.isSameItemPrecise(source, filled.source)) {
+            rollbackInserted(itemMonitor, emptyRequest, null);
+            rollbackInserted(fluidMonitor, fluidRequest, null);
+            return;
+        }
+        if (--source.stackSize <= 0) getPlayerInv().mainInventory[filled.inventorySlot] = null;
+        getPlayerInv().markDirty();
+        detectAndSendChanges();
+    }
+
+    private FilledFluidContainer findFilledFluidContainer(IAEFluidStack target) {
+        IAEStackType<IAEFluidStack> type = target.getStackType();
+        for (int slot = 0; slot < getPlayerInv().mainInventory.length; slot++) {
+            ItemStack stored = getPlayerInv().mainInventory[slot];
+            if (stored == null || stored.stackSize <= 0 || !type.isContainerItemForType(stored)) continue;
+            ItemStack single = stored.copy();
+            single.stackSize = 1;
+            IAEFluidStack contained = type.getStackFromContainerItem(single);
+            if (contained == null || contained.getStackSize() <= 0 || !contained.isSameType(target)) continue;
+            ObjectLongPair<ItemStack> drained = type.drainStackFromContainer(single.copy(), contained.copy());
+            if (drained.left() == null || drained.rightLong() != contained.getStackSize()) continue;
+            IAEFluidStack drainedFluid = contained.copy();
+            drainedFluid.setStackSize(drained.rightLong());
+            return new FilledFluidContainer(slot, single, drained.left(), drainedFluid);
+        }
+        return null;
+    }
+
+    private static boolean canInsertAll(IAEStack<?> leftover) {
+        return leftover == null || leftover.getStackSize() <= 0;
+    }
+
+    private <T extends IAEStack<T>> void rollbackInserted(IMEMonitor<T> monitor, T requested, T leftover) {
+        long leftoverAmount = leftover == null ? 0 : leftover.getStackSize();
+        long insertedAmount = requested.getStackSize() - leftoverAmount;
+        if (insertedAmount <= 0) return;
+        T rollback = requested.copy();
+        rollback.setStackSize(insertedAmount);
+        monitor.extractItems(rollback, Actionable.MODULATE, getActionSource());
+    }
+
+    private EmptyFluidContainer findEmptyFluidContainer(IMEMonitor<IAEItemStack> itemMonitor,
+        IMEMonitor<IAEFluidStack> fluidMonitor, IAEFluidStack fluid) {
+        IAEStackType<IAEFluidStack> type = fluid.getStackType();
+        for (IAEItemStack stored : itemMonitor.getStorageList()) {
+            if (stored == null || stored.getStackSize() <= 0) continue;
+            ItemStack item = stored.getItemStack();
+            if (item == null) continue;
+            item.stackSize = 1;
+            if (!type.isContainerItemForType(item) || type.getStackFromContainerItem(item) != null) continue;
+            long capacity = type.getContainerItemCapacity(item, fluid);
+            if (capacity <= 0) continue;
+            IAEFluidStack full = fluid.copy();
+            full.setStackSize(capacity);
+            ObjectLongPair<ItemStack> filled = type.fillContainer(item.copy(), full);
+            if (!isCompletelyFilled(filled, capacity)) continue;
+            IAEFluidStack available = fluidMonitor.extractItems(full, Actionable.SIMULATE, getActionSource());
+            if (available != null && available.getStackSize() >= capacity) {
+                return new EmptyFluidContainer(stored.copy(), item, capacity);
+            }
+        }
+        return null;
+    }
+
+    private static boolean isCompletelyFilled(ObjectLongPair<ItemStack> result, long capacity) {
+        return result != null && result.left() != null && result.rightLong() == capacity;
+    }
+
+    private boolean canAcceptFilledContainer(ItemStack filled) {
+        if (filled == null) return false;
+        InventoryAdaptor inventory = InventoryAdaptor.getAdaptor(getPlayerInv().player, ForgeDirection.UNKNOWN);
+        return inventory.simulateAdd(filled.copy()) == null;
+    }
+
+    private void giveFilledContainer(ItemStack filled) {
+        InventoryAdaptor.getAdaptor(getPlayerInv().player, ForgeDirection.UNKNOWN)
+            .addItems(filled);
+    }
+
+    private void restoreItem(IMEMonitor<IAEItemStack> monitor, IAEItemStack stack) {
+        if (stack == null || stack.getStackSize() <= 0) return;
+        IAEItemStack leftover = monitor.injectItems(stack, Actionable.MODULATE, getActionSource());
+        if (leftover != null) Platform.handleLeftover(getPlayerInv().player, leftover);
+    }
+
+    private void restoreFluid(IMEMonitor<IAEFluidStack> monitor, IAEFluidStack stack) {
+        if (stack == null || stack.getStackSize() <= 0) return;
+        IAEFluidStack leftover = monitor.injectItems(stack, Actionable.MODULATE, getActionSource());
+        if (leftover != null) Platform.handleLeftover(getPlayerInv().player, leftover);
+    }
+
+    private static final class EmptyFluidContainer {
+
+        private final IAEItemStack stack;
+        private final ItemStack item;
+        private final long capacity;
+
+        private EmptyFluidContainer(IAEItemStack stack, ItemStack item, long capacity) {
+            this.stack = stack;
+            this.item = item;
+            this.capacity = capacity;
+        }
+    }
+
+    private static final class FilledFluidContainer {
+
+        private final int inventorySlot;
+        private final ItemStack source;
+        private final ItemStack empty;
+        private final IAEFluidStack fluid;
+
+        private FilledFluidContainer(int inventorySlot, ItemStack source, ItemStack empty, IAEFluidStack fluid) {
+            this.inventorySlot = inventorySlot;
+            this.source = source;
+            this.empty = empty;
+            this.fluid = fluid;
+        }
     }
 
     public void requestInverted(boolean inverted) {
@@ -858,6 +1117,7 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
         IAEStackInventory outputs = outputsSync.get();
         int oldInputSize = -1;
         int oldOutputSize = -1;
+        encodingWithLogicalInventorySize = true;
         try {
             oldInputSize = AE_STACK_INVENTORY_SIZE.getInt(inputs);
             oldOutputSize = AE_STACK_INVENTORY_SIZE.getInt(outputs);
@@ -872,6 +1132,8 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
                 if (oldOutputSize >= 0 && outputSize >= 0) AE_STACK_INVENTORY_SIZE.setInt(outputs, oldOutputSize);
             } catch (IllegalAccessException exception) {
                 throw new IllegalStateException("Unable to restore AE2 pattern inventory size", exception);
+            } finally {
+                encodingWithLogicalInventorySize = false;
             }
         }
     }
