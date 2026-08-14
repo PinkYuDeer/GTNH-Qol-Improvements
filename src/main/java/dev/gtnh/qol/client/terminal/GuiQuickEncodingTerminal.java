@@ -140,6 +140,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
     private static final Field ITEM_REPO = findField(GuiMEMonitorable.class, "repo");
     private static final Field ITEM_REPO_LIST = findField(ItemRepo.class, "list");
+    private static final Field ITEM_VIEW_UPDATE_PENDING = findField(GuiMEMonitorable.class, "needsViewUpdate");
     private static final Field PATTERN_GUI_CRAFTING_MODE = findField(GuiPatternTerm.class, "craftingMode");
 
     private final ContainerQuickEncodingTerminal patternContainer;
@@ -441,6 +442,23 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
                 Math.max(1, itemRows / 6));
     }
 
+    /**
+     * GuiMEMonitorable defers repository updates until drawScreen and then
+     * recalculates the shared scrollbar with its native nine-column geometry.
+     * This terminal displays four columns, so that native maximum is roughly
+     * half of the real range and clamps the current position on every update.
+     * Refresh the native repository here and consume the pending flag before
+     * the parent draw, leaving scrollbar geometry to updateItemScrollBar().
+     */
+    private void applyPendingItemViewUpdate() {
+        if (itemRepo == null || ITEM_VIEW_UPDATE_PENDING == null) return;
+        try {
+            if (!ITEM_VIEW_UPDATE_PENDING.getBoolean(this)) return;
+            ITEM_VIEW_UPDATE_PENDING.setBoolean(this, false);
+            itemRepo.updateView();
+        } catch (IllegalAccessException ignored) {}
+    }
+
     private void layoutButtons() {
         if (craftingStatusButton != null) {
             if (craftingStatusButton instanceof GuiTabButton) {
@@ -705,6 +723,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         synchronizeNativePinRows();
         interfaceTerminal.refreshButtons();
         applyPendingRecipeSearch();
+        applyPendingItemViewUpdate();
         updateItemGeometry();
         configureItemPanel();
         layoutButtons();
@@ -1621,9 +1640,10 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             for (int i = 0; i < fields.length; i++) {
                 MEGuiTextField field = fields[i];
                 if (field == null || !field.isFocused()) continue;
-                if (key == 1 || key == Minecraft.getMinecraft().gameSettings.keyBindInventory.getKeyCode()) {
-                    return false;
-                }
+                // Escape still belongs to the outer screen and closes it. The
+                // inventory key, however, may be an ordinary printable letter
+                // (E by default) and must be consumed by a focused search box.
+                if (key == 1) return false;
                 if (character == '\t') {
                     field.setFocused(false);
                     for (int step = 1; step < fields.length; step++) {
