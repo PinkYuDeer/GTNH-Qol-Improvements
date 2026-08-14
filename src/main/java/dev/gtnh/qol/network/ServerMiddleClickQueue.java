@@ -18,13 +18,13 @@ import appeng.api.networking.crafting.ICraftingGrid;
 import appeng.api.networking.security.PlayerSource;
 import appeng.api.storage.IMEMonitor;
 import appeng.api.storage.data.IAEItemStack;
+import appeng.api.storage.data.IAEStack;
 import appeng.container.ContainerOpenContext;
 import appeng.container.PrimaryGui;
 import appeng.container.implementations.ContainerCraftAmount;
 import appeng.container.implementations.ContainerMEMonitorable;
 import appeng.core.sync.GuiBridge;
 import appeng.util.Platform;
-import appeng.util.item.AEItemStack;
 import baubles.api.BaublesApi;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
@@ -41,7 +41,7 @@ public final class ServerMiddleClickQueue {
     private static final Queue<Request> REQUESTS = new ConcurrentLinkedQueue<>();
 
     public static void enqueue(EntityPlayerMP player, boolean worldBlock, int hotbarSlot, long amount,
-        ItemStack stack) {
+        IAEStack<?> stack) {
         REQUESTS.add(new Request(player, worldBlock, hotbarSlot, amount, stack == null ? null : stack.copy()));
     }
 
@@ -61,27 +61,25 @@ public final class ServerMiddleClickQueue {
         if (!QolConfig.middleClickOrdering || player == null
             || player.playerNetServerHandler == null
             || request.stack == null
-            || request.stack.getItem() == null) {
+            || !request.stack.isMeaningful()) {
             return;
         }
 
-        ItemStack targetStack = request.stack.copy();
-        targetStack.stackSize = 1;
-        IAEItemStack target = AEItemStack.create(targetStack);
-        if (target == null) {
-            return;
-        }
+        IAEStack<?> target = request.stack.copy();
         target.setStackSize(1);
 
         if (request.worldBlock) {
             if (!QolConfig.dualTerminal) return;
-            processWorldBlock(player, request.hotbarSlot, targetStack, target);
+            if (!(target instanceof IAEItemStack itemTarget) || itemTarget.getItem() == null) return;
+            ItemStack targetStack = itemTarget.getItemStack();
+            targetStack.stackSize = 1;
+            processWorldBlock(player, request.hotbarSlot, targetStack, itemTarget);
         } else {
             processBookmark(player, target, request.amount);
         }
     }
 
-    private static void processBookmark(EntityPlayerMP player, IAEItemStack target, long amount) {
+    private static void processBookmark(EntityPlayerMP player, IAEStack<?> target, long amount) {
         if (!(player.openContainer instanceof ContainerMEMonitorable container)
             || !isCraftable(container.getNetworkNode(), target, player)) {
             return;
@@ -182,7 +180,7 @@ public final class ServerMiddleClickQueue {
         } catch (RuntimeException | LinkageError ignored) {}
     }
 
-    private static boolean isCraftable(IGridNode node, IAEItemStack target, EntityPlayerMP player) {
+    private static boolean isCraftable(IGridNode node, IAEStack<?> target, EntityPlayerMP player) {
         if (node == null || node.getGrid() == null) {
             return false;
         }
@@ -201,7 +199,7 @@ public final class ServerMiddleClickQueue {
         return block != null && block != Blocks.air;
     }
 
-    private static void openCraftAmount(EntityPlayerMP player, ContainerMEMonitorable container, IAEItemStack target,
+    private static void openCraftAmount(EntityPlayerMP player, ContainerMEMonitorable container, IAEStack<?> target,
         long initialAmount) {
         container.setTargetStack(target);
         PrimaryGui primaryGui = container.createPrimaryGui();
@@ -241,9 +239,9 @@ public final class ServerMiddleClickQueue {
         private final boolean worldBlock;
         private final int hotbarSlot;
         private final long amount;
-        private final ItemStack stack;
+        private final IAEStack<?> stack;
 
-        private Request(EntityPlayerMP player, boolean worldBlock, int hotbarSlot, long amount, ItemStack stack) {
+        private Request(EntityPlayerMP player, boolean worldBlock, int hotbarSlot, long amount, IAEStack<?> stack) {
             this.player = player;
             this.worldBlock = worldBlock;
             this.hotbarSlot = hotbarSlot;

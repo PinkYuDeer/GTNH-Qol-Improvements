@@ -6,7 +6,13 @@ import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.StatCollector;
 
+import com.glodblock.github.common.item.ItemFluidDrop;
+import com.glodblock.github.common.item.ItemFluidPacket;
+import com.glodblock.github.util.Util;
+
+import appeng.api.storage.data.IAEStack;
 import appeng.client.gui.implementations.GuiMEMonitorable;
+import appeng.util.item.AEItemStack;
 import codechicken.nei.BookmarkPanel;
 import codechicken.nei.ItemPanel;
 import codechicken.nei.ItemsGrid.ItemsGridSlot;
@@ -90,15 +96,25 @@ final class BookmarkCraftHandler implements IContainerInputHandler, IContainerTo
         if (source == null || source.getItem() == null) return null;
         ItemStack stack = source.copy();
         stack.stackSize = 1;
-        return new OrderTarget(stack, Math.max(1, amount));
+        IAEStack<?> target = isFluidDisplay(stack) ? Util.getAEFluidFromItem(stack) : null;
+        if (target == null) target = AEItemStack.create(stack);
+        if (target == null) return null;
+        target.setStackSize(1);
+        return new OrderTarget(target, Math.max(1, amount));
+    }
+
+    private static boolean isFluidDisplay(ItemStack stack) {
+        return stack.getItem() instanceof gregtech.common.items.ItemFluidDisplay
+            || stack.getItem() instanceof ItemFluidDrop
+            || stack.getItem() instanceof ItemFluidPacket;
     }
 
     private static final class OrderTarget {
 
-        private final ItemStack stack;
+        private final IAEStack<?> stack;
         private final long amount;
 
-        private OrderTarget(ItemStack stack, long amount) {
+        private OrderTarget(IAEStack<?> stack, long amount) {
             this.stack = stack;
             this.amount = amount;
         }

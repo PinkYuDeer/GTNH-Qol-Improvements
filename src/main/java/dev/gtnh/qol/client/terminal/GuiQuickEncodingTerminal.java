@@ -37,6 +37,7 @@ import appeng.api.config.Settings;
 import appeng.api.config.StringOrder;
 import appeng.api.config.TerminalStyle;
 import appeng.api.storage.ITerminalHost;
+import appeng.api.storage.data.IAEItemStack;
 import appeng.api.storage.data.IAEStack;
 import appeng.api.storage.data.IItemList;
 import appeng.client.gui.IInterfaceTerminalPostUpdate;
@@ -55,12 +56,19 @@ import appeng.client.gui.widgets.GuiTabButton;
 import appeng.client.gui.widgets.MEGuiTextField;
 import appeng.client.me.ItemRepo;
 import appeng.client.texture.ExtraBlockTextures;
+import appeng.container.AEBaseContainer;
 import appeng.container.slot.AppEngSlot;
 import appeng.container.slot.SlotPatternTerm;
 import appeng.container.slot.SlotRestrictedInput;
 import appeng.core.AEConfig;
+import appeng.core.sync.network.NetworkHandler;
 import appeng.core.sync.packets.PacketInterfaceTerminalUpdate.PacketEntry;
+import appeng.core.sync.packets.PacketMonitorableAction;
+import appeng.helpers.MonitorableAction;
+import appeng.util.Platform;
 import dev.gtnh.qol.GTNHQolImprovements;
+import dev.gtnh.qol.config.QolConfig;
+import dev.gtnh.qol.network.QolNetwork;
 import dev.gtnh.qol.terminal.ContainerQuickEncodingTerminal;
 import dev.gtnh.qol.terminal.InterfacePatternTarget;
 import dev.gtnh.qol.terminal.RecipeTransferPayload;
@@ -937,6 +945,15 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
     @Override
     protected boolean handleVirtualSlotClick(VirtualMESlot slot, int mouseButton) {
+        if (QolConfig.middleClickOrdering && mouseButton == 1000101 && slot instanceof VirtualMEMonitorableSlot) {
+            IAEStack<?> target = slot.getAEStack();
+            if (target instanceof IAEItemStack item) target = Platform.convertStack(item);
+            if (target != null && target.isFluid()) {
+                QolNetwork.middleClickBookmark(target, 1);
+                suppressExtensionVanillaClick(mouseButton);
+                return true;
+            }
+        }
         boolean handled = super.handleVirtualSlotClick(slot, mouseButton);
         if (slot instanceof VirtualMEPatternSlot) {
             // AEBaseGui applies the phantom stack but deliberately returns
@@ -986,6 +1003,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     @Override
     protected boolean mouseWheelEvent(int mouseX, int mouseY, int wheel) {
         if (isShiftKeyDown() && cycleRecipeAlternative(wheel)) return true;
+        if (handleStorageTransferWheel(wheel)) return true;
         if (!patternContainer.isCraftingMode() && patternContainer.processingGridSizeSync.get() == 4
             && processingScrollBar.contains(mouseX - guiLeft, mouseY - guiTop)) {
             int oldPage = processingScrollBar.getCurrentScroll();
@@ -1008,6 +1026,22 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             return true;
         }
         return super.mouseWheelEvent(mouseX, mouseY, wheel);
+    }
+
+    private boolean handleStorageTransferWheel(int wheel) {
+        if (wheel == 0 || !isCtrlKeyDown() && !isShiftKeyDown()) return false;
+        VirtualMESlot slot = getVirtualMESlotUnderMouse();
+        if (!(slot instanceof VirtualMEMonitorableSlot)) return false;
+
+        MonitorableAction direction = wheel > 0 ? MonitorableAction.ROLL_DOWN : MonitorableAction.ROLL_UP;
+        if (direction == MonitorableAction.ROLL_DOWN && mc.thePlayer.inventory.getItemStack() == null) return false;
+        if (direction == MonitorableAction.ROLL_UP && !(slot.getAEStack() instanceof IAEItemStack)) return false;
+
+        ((AEBaseContainer) inventorySlots).setTargetStack(slot.getAEStack());
+        for (int step = 0; step < Math.abs(wheel); step++) {
+            NetworkHandler.instance.sendToServer(new PacketMonitorableAction(direction, -1));
+        }
+        return true;
     }
 
     private boolean cycleRecipeAlternative(int wheel) {

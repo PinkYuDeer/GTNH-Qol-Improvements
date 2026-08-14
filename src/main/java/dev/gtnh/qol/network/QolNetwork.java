@@ -2,6 +2,7 @@ package dev.gtnh.qol.network;
 
 import net.minecraft.item.ItemStack;
 
+import appeng.api.storage.data.IAEStack;
 import cpw.mods.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 import cpw.mods.fml.relauncher.Side;
 
@@ -28,7 +29,7 @@ public final class QolNetwork {
         CHANNEL.sendToServer(new VajraToolClickMessage(x, y, z, face, hitX, hitY, hitZ));
     }
 
-    public static void middleClickBookmark(ItemStack stack, long amount) {
+    public static void middleClickBookmark(IAEStack<?> stack, long amount) {
         CHANNEL.sendToServer(MiddleClickRequestMessage.bookmark(stack, amount));
     }
 
