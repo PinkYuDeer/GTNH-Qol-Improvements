@@ -35,7 +35,6 @@ import betterquesting.api.questing.IQuest;
 import betterquesting.api.questing.party.IParty;
 import betterquesting.api.questing.tasks.ITask;
 import betterquesting.api.utils.BigItemStack;
-import betterquesting.api.utils.ItemComparison;
 import betterquesting.api2.cache.QuestCache;
 import betterquesting.api2.storage.DBEntry;
 import betterquesting.api2.utils.ParticipantInfo;
@@ -197,13 +196,7 @@ public final class QuestDetectorSubmitter {
     }
 
     private static boolean matches(TaskRetrieval task, BigItemStack required, ItemStack sample) {
-        return ItemComparison.StackMatch(required.getBaseStack(), sample, !task.ignoreNBT, task.partialMatch)
-            || ItemComparison.OreDictionaryMatch(
-                required.getOreIngredient(),
-                required.GetTagCompound(),
-                sample,
-                !task.ignoreNBT,
-                task.partialMatch);
+        return QuestItemMatcher.matches(task, required, sample);
     }
 
     private static void submitFluids(TaskFluid task, ParticipantInfo participant, Map.Entry<UUID, IQuest> questEntry,

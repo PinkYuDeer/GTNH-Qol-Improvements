@@ -38,7 +38,6 @@ import betterquesting.api.questing.IQuest;
 import betterquesting.api.questing.party.IParty;
 import betterquesting.api.questing.tasks.ITask;
 import betterquesting.api.utils.BigItemStack;
-import betterquesting.api.utils.ItemComparison;
 import betterquesting.api2.storage.DBEntry;
 import betterquesting.api2.utils.ParticipantInfo;
 import betterquesting.questing.QuestDatabase;
@@ -123,12 +122,9 @@ final class QuestDetectorScanner {
                     addItemInterest(interests, required.getBaseStack());
                     IAEFluidStack contained = getContainedFluid(required.getBaseStack());
                     if (contained != null) interests.add(contained);
-                    if (required.hasOreDict()) {
-                        for (ItemStack matching : required.getOreIngredient()
-                            .getMatchingStacks()) {
-                            addItemInterest(interests, matching);
-                            if (interests.size() >= MAX_WATCHER_INTERESTS) break;
-                        }
+                    for (ItemStack matching : QuestItemMatcher.getOreStacks(required)) {
+                        addItemInterest(interests, matching);
+                        if (interests.size() >= MAX_WATCHER_INTERESTS) break;
                     }
                     if (interests.size() >= MAX_WATCHER_INTERESTS) break;
                 }
@@ -158,9 +154,7 @@ final class QuestDetectorScanner {
         LinkedHashSet<StoredItem> candidates = new LinkedHashSet<>();
         for (BigItemStack required : task.requiredItems) {
             snapshot.addItemsFor(required.getBaseStack(), candidates);
-            if (!required.hasOreDict()) continue;
-            for (ItemStack matching : required.getOreIngredient()
-                .getMatchingStacks()) {
+            for (ItemStack matching : QuestItemMatcher.getOreStacks(required)) {
                 snapshot.addItemsFor(matching, candidates);
             }
         }
@@ -211,13 +205,7 @@ final class QuestDetectorScanner {
     }
 
     private static boolean matches(TaskRetrieval task, BigItemStack required, ItemStack stack) {
-        return ItemComparison.StackMatch(required.getBaseStack(), stack, !task.ignoreNBT, task.partialMatch)
-            || ItemComparison.OreDictionaryMatch(
-                required.getOreIngredient(),
-                required.GetTagCompound(),
-                stack,
-                !task.ignoreNBT,
-                task.partialMatch);
+        return QuestItemMatcher.matches(task, required, stack);
     }
 
     private static void processFluidTask(TaskFluid task, TaskRef ref, ParticipantInfo participant,
