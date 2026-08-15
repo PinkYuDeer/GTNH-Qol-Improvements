@@ -435,7 +435,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             // storage grid. Starting it below the pins made scroll zero look
             // like a partially scrolled position.
             .setTop(itemPanelY + 18)
-            .setHeight(itemRows * 18 - 2)
+            .setHeight(itemRows * 18)
             .setRange(
                 0,
                 Math.max(0, (size - visibleItemSlots + ITEM_COLUMNS - 1) / ITEM_COLUMNS),

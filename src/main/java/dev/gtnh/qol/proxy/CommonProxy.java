@@ -9,6 +9,7 @@ import dev.gtnh.qol.network.QolNetwork;
 import dev.gtnh.qol.network.ServerMiddleClickQueue;
 import dev.gtnh.qol.network.ServerTerminalOpenQueue;
 import dev.gtnh.qol.network.ServerVajraClickQueue;
+import dev.gtnh.qol.quest.QolBlocks;
 import dev.gtnh.qol.terminal.QolItems;
 import dev.gtnh.qol.terminal.TerminalGuiHandler;
 import dev.gtnh.qol.vajra.VajraEventHandler;
@@ -16,6 +17,7 @@ import dev.gtnh.qol.vajra.VajraEventHandler;
 public class CommonProxy {
 
     public void preInit() {
+        QolBlocks.register();
         QolItems.register();
         QolNetwork.register();
         NetworkRegistry.INSTANCE.registerGuiHandler(GTNHQolImprovements.instance, new TerminalGuiHandler());
@@ -37,6 +39,7 @@ public class CommonProxy {
 
     public void init() {
         QolItems.registerRecipe();
+        QolBlocks.registerRecipe();
     }
 
     public void loadComplete() {}

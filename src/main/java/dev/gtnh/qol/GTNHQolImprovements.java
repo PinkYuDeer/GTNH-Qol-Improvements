@@ -18,7 +18,7 @@ import dev.gtnh.qol.proxy.CommonProxy;
     name = GTNHQolImprovements.MOD_NAME,
     version = Tags.VERSION,
     guiFactory = "dev.gtnh.qol.client.config.QolGuiFactory",
-    dependencies = "required-after:appliedenergistics2;required-after:ae2fc;required-after:gregtech;required-after:NotEnoughItems;required-after:backhand;required-after:Baubles|Expanded")
+    dependencies = "required-after:appliedenergistics2;required-after:ae2fc;required-after:gregtech;required-after:NotEnoughItems;required-after:backhand;required-after:Baubles|Expanded;required-after:betterquesting")
 public final class GTNHQolImprovements {
 
     public static final String MOD_ID = "gtnh_qol_improvements";

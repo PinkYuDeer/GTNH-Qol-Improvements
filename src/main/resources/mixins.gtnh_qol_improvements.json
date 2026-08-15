@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8.3-GTNH",
+  "package": "dev.gtnh.qol.mixin",
+  "refmap": "mixins.gtnh_qol_improvements.refmap.json",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "MixinQuestInstance"
+  ],
+  "client": [],
+  "server": []
+}

@@ -3,7 +3,7 @@
 	"modList": [{
 		"modid": "${modId}",
 		"name": "${modName}",
-		"description": "Configurable GTNH quality-of-life improvements for the Vajra and AE2 terminals.",
+		"description": "Configurable GTNH quality-of-life improvements for the Vajra, AE2 terminals, and quest detection.",
 		"version": "${modVersion}",
 		"mcversion": "${minecraftVersion}",
 		"url": "",

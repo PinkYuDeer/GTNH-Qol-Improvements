@@ -16,6 +16,7 @@ public final class QolConfig {
     public static boolean terminalGtRecipeSearchSuffix = true;
     public static boolean middleClickOrdering = true;
     public static boolean craftingTreeMissingBranches = true;
+    public static boolean questDetector = true;
 
     private static Configuration configuration;
 
@@ -83,6 +84,15 @@ public final class QolConfig {
                 + "在AE2合成计划的合成树中添加仅显示缺失原料分支的客户端按钮。");
         missingBranches.setLanguageKey("gtnh_qol_improvements.config.craftingTreeMissingBranches");
         craftingTreeMissingBranches = missingBranches.getBoolean(true);
+
+        Property detector = configuration.get(
+            CATEGORY_FEATURES,
+            "questDetector",
+            true,
+            "Enable the ME Quest Detector, which checks non-consumable BetterQuesting tasks and supplies consumable tasks when explicitly submitted.\n"
+                + "启用ME任务检测器：检测BetterQuesting非消耗任务，并在玩家主动交付时使用ME库存完成消耗型任务。");
+        detector.setLanguageKey("gtnh_qol_improvements.config.questDetector");
+        questDetector = detector.getBoolean(true);
 
         ConfigCategory category = configuration.getCategory(CATEGORY_FEATURES);
         category.setLanguageKey("gtnh_qol_improvements.config.features");

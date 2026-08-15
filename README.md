@@ -1,51 +1,64 @@
 # GTNH QoL Improvements
 
-面向 GT New Horizons 1.7.10 Daily 的轻量 QoL 模组，集中改善金刚杵操作与 AE2 样板编码流程。所有功能均可在配置页中独立开关。
+[简体中文](README_ZH_CN.md)
 
-![快速编码终端界面](docs/images/quick-encoding-terminal.png)
+A lightweight quality-of-life mod for GT New Horizons 1.7.10 Daily, focused on improving Vajra interactions, AE2 pattern encoding, and quest detection. Every feature can be toggled independently in the configuration GUI.
 
-## 主要功能
+![Quick Encoding Terminal](docs/images/quick-encoding-terminal.png)
 
-### 快速编码终端
+## Features
 
-- 在同一界面中整合 ME 库存、接口终端和样板编码。
-- 提供可直接安装在线缆上的早期面板版，仅需普通 ME 样板终端与 ME 接口终端合成，支持合成及 3×3 处理样板。
-- 支持 3×3 合成、3×3 处理和 4×4 处理样板，并自动适配配方类型。
-- 支持 NEI 配方转移、Alt 一键编码/搜索/上传，以及 GT 虚拟电路和不消耗物品的搜索后缀。
-- 支持在终端中键点击 NEI 书签发起下单；在世界中键方块时可从玩家背包选取、从 ME 库存取出，或在无现货时打开自动合成下单界面。
-- 可放入 Baubles Expanded 的 `Terminal` 饰品槽，并通过自定义快捷键打开。
-- 可与 AE2FC 能量卡或量子桥卡合成，获得无限电力或无视距离与维度限制的能力。
+### Quick Encoding Terminal
 
-无线版由 ME 无线终端、ME 扩展样板终端和 ME 接口终端合成，提供完整的 4×4 处理能力；面板版不需要无线组件或 ME 扩展样板终端，适合 AE 初期使用。
+- Combines ME storage, the Interface Terminal, and pattern encoding in one screen.
+- Provides an early-game panel version that attaches directly to an ME cable. It only requires a regular ME Pattern Terminal and ME Interface Terminal, and supports crafting and 3×3 processing patterns.
+- Supports 3×3 crafting, 3×3 processing, and 4×4 processing patterns, with automatic recipe-type selection.
+- Supports NEI recipe transfer, Alt-click encoding/search/upload, and search suffixes for GT virtual circuits and non-consumable ingredients.
+- Middle-click NEI bookmarks to request autocrafting. Middle-click blocks in the world to select them from the player inventory, extract them from ME storage, or open an autocrafting request when none are available.
+- Fits in the Baubles Expanded `Terminal` slot and can be opened with a configurable keybind.
+- Can be crafted with an AE2FC Energy Card or Quantum Bridge Card for infinite power or unlimited range and cross-dimensional access.
 
-### 金刚杵增强
+The wireless version is crafted from an ME Wireless Terminal, ME Extended Pattern Terminal, and ME Interface Terminal, and provides full 4×4 processing support. The panel version needs neither wireless components nor the ME Extended Pattern Terminal, making it suitable for early AE progression.
 
-- 挖掘时自动使用副手方块替换原方块。
-- 提供 GT 扳手与剪线钳的九宫格交互，可调整机器朝向以及线缆、管道连接。
-- 加入手感同创造模式的长按挖掘保护，点按不受影响，降低误拆机器和管线的风险。
+### Vajra Improvements
 
-## 配置
+- Replaces mined blocks with blocks from the offhand.
+- Adds GT wrench and wire-cutter grid interactions for rotating machines and changing cable or pipe connections.
+- Adds hold-to-mine protection with creative-mode-like handling. Quick clicks remain unaffected, reducing accidental machine and cable removal.
 
-在 `Mods -> GTNH QoL Improvements -> Config` 中设置，配置文件为 `config/gtnh_qol_improvements.cfg`。
+### ME Quest Detector
 
-五个独立开关：
+- Binds to the placing player or party, connects to an ME network, and consumes one channel.
+- Uses network items and fluids for BetterQuesting detection tasks. The Detect/Submit button can also consume ME inventory for submission tasks while respecting AE permissions.
+- Supports BetterQuesting ore-dictionary, NBT, and fuzzy matching rules. Native ME fluids and fluids stored in GT cells or other containers are both recognized.
+- Uses targeted storage watchers, low-frequency fallback scans, and per-network/party deduplication to control overhead on large quest books and ME networks.
+
+## Configuration
+
+Configure the mod through `Mods -> GTNH QoL Improvements -> Config`. The configuration file is `config/gtnh_qol_improvements.cfg`.
+
+Main switches:
 
 - `vajraOffhandReplacement`
 - `vajraToolFunctions`
 - `dualTerminal`
 - `terminalGtRecipeSearchSuffix`
-- `middleClickOrdering`（默认开启）
+- `middleClickOrdering` (enabled by default)
+- `craftingTreeMissingBranches`
+- `questDetector` (enabled by default)
 
-## 依赖
+## Requirements
 
-适用于包含 AE2、AE2 Fluid Crafting、GregTech 5U、NEI、Backhand 和 Baubles Expanded 的 GTNH Daily 实例。模组需要同时安装在客户端和服务端。
+Designed for GTNH Daily instances containing AE2, AE2 Fluid Crafting, GregTech 5U, BetterQuesting, NEI, Backhand, and Baubles Expanded. The mod must be installed on both the client and server.
 
-仓库同时提供 [Modernity Dark UI 适配资源包](resourcepack/modernity-dark-ui)，在资源包列表中将其置于 Modernity 之上即可使用；每次 tag 发布都会自动附带对应 ZIP。
+The repository also includes a [Modernity Dark UI compatibility resource pack](resourcepack/modernity-dark-ui). Place it above Modernity in the resource-pack list. Every tagged release automatically includes the ZIP.
 
-## 致谢
+## Credits
 
-快速编码终端的创意来源于 [AE2Things](https://github.com/asdflj/AE2Things)，感谢其作者和贡献者为 GTNH 社区提供的优秀设计。
+The Quick Encoding Terminal was inspired by [AE2Things](https://github.com/asdflj/AE2Things). Thanks to its authors and contributors for their work for the GTNH community.
 
-## 许可证
+The ME Quest Detector references the AE quest-detection approaches used by [ME_Quests_Detector](https://github.com/illuciaz23/ME_Quests_Detector) and GTLSupb. Its block textures are reused under the original author's MIT license.
 
-本项目采用 [GNU General Public License v3.0](LICENSE) 许可证。
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
