@@ -1136,6 +1136,11 @@ public final class ContainerQuickEncodingTerminal extends ContainerPatternTerm {
                 encodingWithLogicalInventorySize = false;
             }
         }
+        // The call made by ContainerPatternTerm.encode() is deliberately
+        // suppressed while the logical inventory sizes are temporary. Once
+        // the real 32-slot inventories are restored, send the encoded-pattern
+        // output slot and the full AE stack inventories together.
+        if (Platform.isServer()) detectAndSendChanges();
     }
 
     /**

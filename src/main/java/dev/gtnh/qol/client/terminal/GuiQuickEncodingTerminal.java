@@ -5,8 +5,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
@@ -62,6 +67,7 @@ import appeng.container.slot.SlotPatternTerm;
 import appeng.container.slot.SlotRestrictedInput;
 import appeng.core.AEConfig;
 import appeng.core.sync.network.NetworkHandler;
+import appeng.core.sync.packets.PacketInterfaceTerminalUpdate;
 import appeng.core.sync.packets.PacketInterfaceTerminalUpdate.PacketEntry;
 import appeng.core.sync.packets.PacketMonitorableAction;
 import appeng.helpers.MonitorableAction;
@@ -175,6 +181,9 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     private boolean pendingAutoPlace;
     private long suppressExtensionClickUntil;
     private int suppressExtensionButton = -1;
+    private final Set<VirtualMEMonitorableSlot> draggedStorageSlots = Collections
+        .newSetFromMap(new IdentityHashMap<>());
+    private boolean storageShiftDrag;
 
     public GuiQuickEncodingTerminal(InventoryPlayer inventoryPlayer, ITerminalHost host) {
         this(inventoryPlayer, host, new ContainerQuickEncodingTerminal(inventoryPlayer, host));
@@ -899,6 +908,8 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
+        draggedStorageSlots.clear();
+        storageShiftDrag = false;
         // This screen contains four independent search fields. Clear them all
         // first, then let the field under the cursor regain focus later in the
         // normal click dispatch. This also makes clicks in Encoding, ME Storage
@@ -949,6 +960,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         if (mouseX >= guiLeft && mouseX < guiLeft + xSize && mouseY >= guiTop && mouseY < guiTop + ySize - 98) {
             InterfacePatternTarget target = interfaceTerminal.patternSlotAt(mouseX, mouseY);
             if (target != null && (button == 0 || button == 1) && !isCtrlKeyDown()) {
+                interfaceTerminal.freezeSearchResults();
                 patternContainer.requestInterfacePatternClick(target, isShiftKeyDown());
                 return;
             }
@@ -960,6 +972,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     @Override
     protected void mouseClickMove(int mouseX, int mouseY, int button, long timeSinceLastClick) {
         interfaceTerminal.dragScrollBar(mouseY, button);
+        handleStorageShiftDrag(mouseX, mouseY, button);
         super.mouseClickMove(mouseX, mouseY, button, timeSinceLastClick);
     }
 
@@ -993,6 +1006,14 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
             }
         }
         boolean handled = super.handleVirtualSlotClick(slot, mouseButton);
+        if (handled && mouseButton == 0
+            && isShiftKeyDown()
+            && slot instanceof VirtualMEMonitorableSlot monitorable
+            && !(slot instanceof VirtualMEPinSlot)
+            && monitorable.getAEStack() instanceof IAEItemStack) {
+            storageShiftDrag = true;
+            draggedStorageSlots.add(monitorable);
+        }
         if (slot instanceof VirtualMEPatternSlot) {
             // AEBaseGui applies the phantom stack but deliberately returns
             // false. Our encoding panel is outside the native GuiContainer
@@ -1021,6 +1042,10 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
         super.mouseMovedOrUp(mouseX, mouseY, state);
         if (state == 0) interfaceTerminal.cancelScrollDrag();
+        if (state == 0) {
+            storageShiftDrag = false;
+            draggedStorageSlots.clear();
+        }
         if (state == suppressExtensionButton) {
             suppressExtensionButton = -1;
             suppressExtensionClickUntil = 0;
@@ -1030,6 +1055,26 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
     private void suppressExtensionVanillaClick(int button) {
         suppressExtensionButton = button;
         suppressExtensionClickUntil = System.currentTimeMillis() + 1000;
+    }
+
+    private void handleStorageShiftDrag(int mouseX, int mouseY, int button) {
+        if (!storageShiftDrag || button != 0 || !isShiftKeyDown() || monitorableSlots == null) return;
+        int relativeX = mouseX - guiLeft + 1;
+        int relativeY = mouseY - guiTop + 1;
+        for (VirtualMEMonitorableSlot slot : monitorableSlots) {
+            if (slot == null || !slot.isHovered(relativeX, relativeY) || draggedStorageSlots.contains(slot)) continue;
+            if (!(slot.getAEStack() instanceof IAEItemStack stack) || stack.getStackSize() <= 0L) return;
+            draggedStorageSlots.add(slot);
+            ((AEBaseContainer) inventorySlots).setTargetStack(stack);
+            NetworkHandler.instance.sendToServer(new PacketMonitorableAction(MonitorableAction.SHIFT_CLICK, -1));
+            return;
+        }
+    }
+
+    @Override
+    public void onGuiClosed() {
+        interfaceTerminal.rememberSearchText();
+        super.onGuiClosed();
     }
 
     private boolean isInsideStoragePanel(int mouseX, int mouseY) {
@@ -1520,6 +1565,8 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         private Object highlightedEntry;
         private InterfacePatternTarget highlightedTarget;
         private boolean scrollBarDragging;
+        private SearchResultSnapshot frozenSearchResults;
+        private String[] frozenSearchTexts;
 
         private EmbeddedInterfaceTerminal(Container container) {
             super(container);
@@ -1629,6 +1676,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         }
 
         private void perform(GuiButton button) {
+            clearFrozenSearchResults();
             super.actionPerformed(button);
         }
 
@@ -1657,7 +1705,11 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
                 }
                 String oldText = field.getText();
                 boolean handled = field.textboxKeyTyped(character, key);
-                if (!oldText.equals(field.getText())) clearHighlight();
+                if (!oldText.equals(field.getText())) {
+                    clearHighlight();
+                    clearFrozenSearchResults();
+                    rememberSearchText();
+                }
                 return handled;
             }
             return false;
@@ -1665,8 +1717,21 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
 
         private void setSearchFieldValue(String displayName, int mouseX, int mouseY, ItemStack stack) {
             String[] previous = searchTexts();
+            MEGuiTextField input = textField(INPUT_SEARCH);
+            MEGuiTextField output = textField(OUTPUT_SEARCH);
+            MEGuiTextField names = textField(NAME_SEARCH);
+            boolean itemSearch = input != null && input.isMouseIn(mouseX, mouseY)
+                || output != null && output.isMouseIn(mouseX, mouseY);
+            if (itemSearch && names != null
+                && !names.getText()
+                    .isEmpty())
+                names.setText("");
             super.setTextFieldValue(displayName, mouseX, mouseY, stack);
-            if (!java.util.Arrays.equals(previous, searchTexts())) clearHighlight();
+            if (!java.util.Arrays.equals(previous, searchTexts())) {
+                clearHighlight();
+                clearFrozenSearchResults();
+                rememberSearchText();
+            }
         }
 
         private String[] searchTexts() {
@@ -1690,6 +1755,7 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
         }
 
         private void setAutomaticSearchText(String text) {
+            clearFrozenSearchResults();
             for (Field search : new Field[] { INPUT_SEARCH, OUTPUT_SEARCH }) {
                 MEGuiTextField field = textField(search);
                 if (field != null && !field.getText()
@@ -1705,6 +1771,150 @@ public final class GuiQuickEncodingTerminal extends GuiPatternTerm implements II
                 field.setText(newText);
             }
             getScrollBar().setCurrentScroll(0);
+            rememberSearchText();
+        }
+
+        private void rememberSearchText() {
+            MEGuiTextField inputs = textField(INPUT_SEARCH);
+            MEGuiTextField outputs = textField(OUTPUT_SEARCH);
+            MEGuiTextField names = textField(NAME_SEARCH);
+            searchFieldInputsText = inputs == null ? "" : inputs.getText();
+            searchFieldOutputsText = outputs == null ? "" : outputs.getText();
+            searchFieldNamesText = names == null ? "" : names.getText();
+        }
+
+        private void freezeSearchResults() {
+            String[] texts = searchTexts();
+            if (Arrays.stream(texts)
+                .allMatch(String::isEmpty)) {
+                clearFrozenSearchResults();
+                return;
+            }
+            SearchResultSnapshot snapshot = SearchResultSnapshot.capture(this);
+            if (snapshot == null) return;
+            frozenSearchResults = snapshot;
+            frozenSearchTexts = texts;
+        }
+
+        private void clearFrozenSearchResults() {
+            frozenSearchResults = null;
+            frozenSearchTexts = null;
+        }
+
+        @Override
+        public void postUpdate(List<PacketEntry> updates, int statusFlags) {
+            boolean restore = frozenSearchResults != null && Arrays.equals(frozenSearchTexts, searchTexts())
+                && !containsStructuralUpdate(updates, statusFlags);
+            if (!restore) clearFrozenSearchResults();
+            super.postUpdate(updates, statusFlags);
+            if (restore && frozenSearchResults != null) frozenSearchResults.restore(this);
+        }
+
+        private static boolean containsStructuralUpdate(List<PacketEntry> updates, int statusFlags) {
+            if ((statusFlags
+                & (PacketInterfaceTerminalUpdate.CLEAR_ALL_BIT | PacketInterfaceTerminalUpdate.DISCONNECT_BIT)) != 0)
+                return true;
+            for (PacketEntry update : updates) {
+                String type = update.getClass()
+                    .getSimpleName();
+                if ("PacketRemove".equals(type) || "PacketRename".equals(type)) return true;
+                if ("PacketOverwrite".equals(type)
+                    && (booleanField(update, "onlineValid") || booleanField(update, "sizeValid")
+                        || booleanField(update, "priorityValid")
+                        || booleanField(update, "terminalVisibleValid")))
+                    return true;
+            }
+            return false;
+        }
+
+        private static boolean booleanField(Object owner, String name) {
+            Field field = owner == null ? null : findField(owner.getClass(), name);
+            if (field == null) return false;
+            try {
+                return field.getBoolean(owner);
+            } catch (IllegalAccessException ignored) {
+                return false;
+            }
+        }
+
+        private void resetScrollBarRange() {
+            try {
+                Method method = GuiInterfaceTerminal.class.getDeclaredMethod("setScrollBar");
+                method.setAccessible(true);
+                method.invoke(this);
+            } catch (ReflectiveOperationException ignored) {}
+        }
+
+        private static final class SearchResultSnapshot {
+
+            private final Object masterList;
+            private final int height;
+            private final List<Object> visibleSections;
+            private final Map<Object, List<Object>> visibleEntries;
+
+            private SearchResultSnapshot(Object masterList, int height, List<Object> visibleSections,
+                Map<Object, List<Object>> visibleEntries) {
+                this.masterList = masterList;
+                this.height = height;
+                this.visibleSections = visibleSections;
+                this.visibleEntries = visibleEntries;
+            }
+
+            private static SearchResultSnapshot capture(EmbeddedInterfaceTerminal terminal) {
+                Object masterList = objectField(terminal, MASTER_LIST);
+                if (masterList == null) return null;
+                try {
+                    Method getVisibleSections = masterList.getClass()
+                        .getDeclaredMethod("getVisibleSections");
+                    getVisibleSections.setAccessible(true);
+                    List<Object> sections = new ArrayList<>((List<?>) getVisibleSections.invoke(masterList));
+                    Map<Object, List<Object>> entries = new IdentityHashMap<>();
+                    for (Object section : sections) {
+                        Object visible = objectField(section, findField(section.getClass(), "visibleEntries"));
+                        if (visible instanceof Collection<?>collection) {
+                            entries.put(section, new ArrayList<>(collection));
+                        }
+                    }
+                    return new SearchResultSnapshot(masterList, intField(masterList, "height", 0), sections, entries);
+                } catch (ReflectiveOperationException ignored) {
+                    return null;
+                }
+            }
+
+            private void restore(EmbeddedInterfaceTerminal terminal) {
+                replaceCollection(masterList, "visibleSections", visibleSections);
+                setIntField(masterList, "height", height);
+                setBooleanField(masterList, "isDirty", false);
+                for (Map.Entry<Object, List<Object>> entry : visibleEntries.entrySet()) {
+                    replaceCollection(entry.getKey(), "visibleEntries", entry.getValue());
+                    setBooleanField(entry.getKey(), "isDirty", false);
+                }
+                terminal.resetScrollBarRange();
+            }
+
+            @SuppressWarnings({ "rawtypes", "unchecked" })
+            private static void replaceCollection(Object owner, String name, Collection<?> replacement) {
+                Object value = objectField(owner, findField(owner.getClass(), name));
+                if (!(value instanceof Collection collection)) return;
+                collection.clear();
+                collection.addAll(replacement);
+            }
+
+            private static void setIntField(Object owner, String name, int value) {
+                Field field = findField(owner.getClass(), name);
+                if (field == null) return;
+                try {
+                    field.setInt(owner, value);
+                } catch (IllegalAccessException ignored) {}
+            }
+
+            private static void setBooleanField(Object owner, String name, boolean value) {
+                Field field = findField(owner.getClass(), name);
+                if (field == null) return;
+                try {
+                    field.setBoolean(owner, value);
+                } catch (IllegalAccessException ignored) {}
+            }
         }
 
         private InterfacePatternTarget highlightFirstEmptyPatternSlot() {
